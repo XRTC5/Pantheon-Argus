@@ -89,27 +89,29 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
             }
 
             var explain = new System.Text.StringBuilder();
-            if (!string.IsNullOrWhiteSpace(target.What))
-            {
-                explain.AppendLine(target.What.Trim());
-                explain.AppendLine();
-            }
+
+            // One plain sentence first. Without it this is a port number and a
+            // pid, which tells you what is true but not what the thing is.
+            explain.AppendLine(string.IsNullOrWhiteSpace(target.What)
+                ? (target.Port != 0
+                    ? $"A local service on port {target.Port}. Argus checks the port is open, then "
+                      + "asks it for a page - the two are not the same thing."
+                    : "A background process Argus watches for.")
+                : target.What.Trim());
+
+            explain.AppendLine();
+
             if (target.Port != 0)
             {
-                explain.AppendLine($"Address:  http://127.0.0.1:{target.Port}{target.HealthPath}");
-                explain.AppendLine(portOpen
-                    ? "Port:  open, something is listening"
-                    : "Port:  closed, nothing is listening");
+                explain.AppendLine($"Port    {target.Port} - " + (portOpen
+                    ? (state == SignalState.Live ? "open and answering" : "open, but not answering")
+                    : "closed, nothing listening"));
+                explain.AppendLine($"Address http://127.0.0.1:{target.Port}{target.HealthPath}");
             }
+
             explain.AppendLine(proc is not null
-                ? $"Process:  {proc.Name}  pid {proc.Pid}"
-                : "Process:  not running");
-            if (proc is not null)
-            {
-                var cmd = scanner.GetCommandLine(proc.Pid);
-                if (!string.IsNullOrWhiteSpace(cmd))
-                    explain.AppendLine($"Command:  {(cmd.Length > 240 ? cmd[..240] + "..." : cmd)}");
-            }
+                ? $"Process {Trim(proc.Name)}, pid {proc.Pid}"
+                : "Process not running");
 
             results.Add(new Signal
             {

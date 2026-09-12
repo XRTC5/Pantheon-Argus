@@ -1,3 +1,4 @@
+using System.Linq;
 using Argus.Core;
 
 // No blanket using for the scheduler library: it defines its own Task, which
@@ -76,8 +77,15 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
                    : hasNext ? Until(next)
                    : "on demand";
 
-        // 0 is success. 0x41301 is "still running" and is not a failure.
-        var failed = code != 0 && code != 0x41301;
+        // Codes that are not failures, however alarming they look:
+        //   0x00041301  the task is running right now
+        //   0x00041325  queued, waiting its turn
+        //   0x800710E0  a fire was skipped because the last run is still going,
+        //               which is exactly what MultipleInstances=IgnoreNew means
+        var failed = code != 0
+                  && code != 0x41301
+                  && code != 0x41325
+                  && unchecked((uint)code) != 0x800710E0;
 
         var state = running ? SignalState.Live
                   : failed ? SignalState.Bad
@@ -114,57 +122,60 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
     }
 
     /// <summary>
-    /// The long-form answer for the hover: what the task is for, the literal
-    /// command line it runs, when it fires, and how it last went.
+    /// What this row is, in one plain sentence, then the few facts worth
+    /// having.
     ///
-    /// Read out of the task rather than described from memory, so it cannot
-    /// drift out of date when the task is edited.
+    /// The sentence comes first and always exists. An earlier version led with
+    /// the task name and the literal command line, which answers "what does it
+    /// run" but not "what is it for" - and the second question is the one
+    /// someone actually has when they click a label they wrote months ago.
     /// </summary>
     private static string BuildExplain(WatchTarget target, SchedTask task, bool failed, int code)
     {
         var sb = new System.Text.StringBuilder();
 
-        if (!string.IsNullOrWhiteSpace(target.What))
-        {
-            sb.AppendLine(target.What.Trim());
-            sb.AppendLine();
-        }
+        sb.AppendLine(string.IsNullOrWhiteSpace(target.What)
+            ? "A Windows scheduled task. Argus counts down to its next run and says whether the "
+              + "last one actually worked."
+            : target.What.Trim());
 
-        sb.AppendLine($"Scheduled task:  {task.Name}");
+        sb.AppendLine();
 
         try
         {
-            foreach (var action in task.Definition.Actions)
-            {
-                if (action is Microsoft.Win32.TaskScheduler.ExecAction exec)
-                {
-                    var cmd = exec.Path;
-                    if (!string.IsNullOrWhiteSpace(exec.Arguments)) cmd += " " + exec.Arguments;
-                    sb.AppendLine($"Runs:  {Shorten(cmd, 240)}");
-                }
-                else
-                {
-                    sb.AppendLine($"Runs:  {action.ActionType}");
-                }
-            }
-
-            foreach (var trigger in task.Definition.Triggers)
-                sb.AppendLine($"Fires:  {DescribeTrigger(trigger)}");
+            var triggers = task.Definition.Triggers;
+            if (triggers.Count > 0)
+                sb.AppendLine($"Fires   {string.Join("; ", triggers.Select(DescribeTrigger))}");
         }
-        catch (Exception ex)
-        {
-            sb.AppendLine($"(could not read the task definition: {ex.Message})");
-        }
+        catch { /* a task we cannot read is still worth describing */ }
 
-        if (task.LastRunTime > new DateTime(2000, 1, 1))
-            sb.AppendLine($"Last ran:  {task.LastRunTime:ddd HH:mm}");
+        var ago = task.LastRunTime > new DateTime(2000, 1, 1)
+            ? $", {ProcessProbe.Ago(new DateTimeOffset(task.LastRunTime))} ago"
+            : "";
 
         sb.AppendLine(failed
-            ? $"Last result:  FAILED - {Explain(code)}"
-            : "Last result:  ok");
+            ? $"Last    FAILED - {Explain(code)}"
+            : code == 0 || task.LastRunTime <= new DateTime(2000, 1, 1)
+                ? (string.IsNullOrEmpty(ago) ? "Last    has not run yet" : $"Last    ok{ago}")
+                : $"Last    {Explain(code)}{ago}");
 
-        if (task.NextRunTime > DateTime.Now)
-            sb.AppendLine($"Next:  {task.NextRunTime:ddd HH:mm}");
+        if (task.NextRunTime > DateTime.Now && task.NextRunTime < DateTime.Now.AddYears(1))
+            sb.AppendLine($"Next    {task.NextRunTime:ddd HH:mm}");
+
+        try
+        {
+            var exec = task.Definition.Actions
+                .OfType<Microsoft.Win32.TaskScheduler.ExecAction>()
+                .FirstOrDefault();
+
+            if (exec is not null)
+            {
+                var cmd = exec.Path;
+                if (!string.IsNullOrWhiteSpace(exec.Arguments)) cmd += " " + exec.Arguments;
+                sb.AppendLine($"Runs    {Shorten(cmd, 150)}");
+            }
+        }
+        catch { /* as above */ }
 
         return sb.ToString().TrimEnd();
     }
@@ -213,7 +224,8 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
         0x00000001 => "exit code 1",
         0x00000002 => "exit code 2",
         0x00041306 => "terminated by the scheduler",
-        0x00041325 => "queued",
+        0x00041325 => "queued, waiting its turn",
+        0x800710E0 => "skipped - the previous run was still going",
         _          => $"0x{unchecked((uint)code):X8}",
     };
 }

@@ -72,18 +72,22 @@ public sealed class ProcessProbe(ArgusSettings settings, ProcessScanner scanner)
             var label = g.Count > 1 ? $"{Strip(g.Name)}  x{g.Count}" : Strip(g.Name);
 
             var lead = scanner.GetCommandLine(g.Lead.Pid);
+
+            var what = g.Lead.IsForeground
+                ? "The program you are using right now."
+                : g.Lead.HasWindow
+                    ? "A program with a window open, not currently in front."
+                    : "A background program - no window, it just runs.";
+
             var procExplain =
-                $"{g.Name}\n\n" +
+                $"{what}\n\n" +
                 (g.Count > 1
-                    ? $"{g.Count} processes under this name, {FormatMb(g.Mem)} between them.\n"
-                    : $"One process, {FormatMb(g.Mem)}.\n") +
-                $"Leading pid:  {g.Lead.Pid}\n" +
-                (g.Lead.IsForeground ? "This is the window you are using right now.\n"
-                 : g.Lead.HasWindow ? "Has a visible window.\n"
-                 : "No window - it runs in the background.\n") +
+                    ? $"Count   {g.Count} processes, {FormatMb(g.Mem)} between them\n"
+                    : $"Memory  {FormatMb(g.Mem)}\n") +
+                $"Pid     {g.Lead.Pid}" +
                 (string.IsNullOrWhiteSpace(lead)
                     ? ""
-                    : $"\nCommand:  {(lead.Length > 300 ? lead[..300] + "..." : lead)}");
+                    : $"\nRuns    {(lead.Length > 150 ? lead[..150] + "..." : lead)}");
 
             results.Add(new Signal
             {
