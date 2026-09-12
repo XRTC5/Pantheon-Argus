@@ -82,20 +82,33 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
         //   0x00041325  queued, waiting its turn
         //   0x800710E0  a fire was skipped because the last run is still going,
         //               which is exactly what MultipleInstances=IgnoreNew means
-        var failed = code != 0
-                  && code != 0x41301
-                  && code != 0x41325
-                  && unchecked((uint)code) != 0x800710E0;
+        var benign = code == 0
+                  || code == 0x41301
+                  || code == 0x41325
+                  || unchecked((uint)code) == 0x800710E0;
+
+        // Interrupted, not broken. A long job that was still going when the
+        // machine restarted reports 0x41306, and so does one the user stopped
+        // by hand. Calling that FAILED is how a status panel teaches its owner
+        // to ignore it - the job did not break, it was cut short, and a
+        // resumable one simply picks up where it left off.
+        var interrupted = code == 0x41306;
+
+        var failed = !benign && !interrupted;
 
         var state = running ? SignalState.Live
                   : failed ? SignalState.Bad
-                  : hasNext ? SignalState.Idle
+                  : interrupted ? SignalState.Warn
                   : SignalState.Idle;
 
         string sub;
         if (failed)
         {
             sub = $"last run FAILED {Explain(code)}";
+        }
+        else if (interrupted)
+        {
+            sub = "last run was cut short, usually a restart";
         }
         else if (last > new DateTime(2000, 1, 1))
         {
@@ -109,7 +122,7 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
 
         return new Signal
         {
-            Explain = BuildExplain(target, task, failed, code),
+            Explain = BuildExplain(target, task, failed, interrupted, code),
             Id = "sched:" + target.Name,
             Group = SignalGroup.Schedule,
             Title = target.Name,
@@ -130,7 +143,8 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
     /// run" but not "what is it for" - and the second question is the one
     /// someone actually has when they click a label they wrote months ago.
     /// </summary>
-    private static string BuildExplain(WatchTarget target, SchedTask task, bool failed, int code)
+    private static string BuildExplain(WatchTarget target, SchedTask task, bool failed,
+                                       bool interrupted, int code)
     {
         var sb = new System.Text.StringBuilder();
 
@@ -155,6 +169,8 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
 
         sb.AppendLine(failed
             ? $"Last    FAILED - {Explain(code)}"
+            : interrupted
+            ? $"Last    cut short - {Explain(code)}{ago}"
             : code == 0 || task.LastRunTime <= new DateTime(2000, 1, 1)
                 ? (string.IsNullOrEmpty(ago) ? "Last    has not run yet" : $"Last    ok{ago}")
                 : $"Last    {Explain(code)}{ago}");
@@ -223,7 +239,7 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
         0x80070005 => "access denied",
         0x00000001 => "exit code 1",
         0x00000002 => "exit code 2",
-        0x00041306 => "terminated by the scheduler",
+        0x00041306 => "stopped before it finished - usually a restart",
         0x00041325 => "queued, waiting its turn",
         0x800710E0 => "skipped - the previous run was still going",
         _          => $"0x{unchecked((uint)code):X8}",
