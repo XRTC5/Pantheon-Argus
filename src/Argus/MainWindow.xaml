@@ -1,0 +1,356 @@
+<Window x:Class="Argus.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Argus"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        AllowsTransparency="True"
+        Background="{StaticResource Bg}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextRenderingMode="ClearType"
+        TextOptions.TextFormattingMode="Display"
+        Width="330" Height="900" Left="0" Top="0">
+
+    <!--
+        AllowsTransparency is True, having started out False.
+
+        The reason to avoid it is that it forces a window into software
+        rendering for life. That objection died when Argus moved to
+        RenderMode.SoftwareOnly deliberately, to stop WPF loading both GPU
+        vendors’ display drivers on this dual-GPU laptop. There is no second
+        penalty to pay.
+
+        It is also the only way to get opacity at all here: with
+        AllowsTransparency false, WPF strips WS_EX_LAYERED off the window, so
+        SetLayeredWindowAttributes silently did nothing and the opacity slider
+        moved a number that changed nothing on screen.
+    -->
+
+    <Window.Resources>
+
+        <!--
+            Rows live here rather than in Theme.xaml because they need a click
+            handler, and a plain ResourceDictionary has no code-behind to bind
+            one to.
+
+            The explanation is shown inline rather than in a tooltip. Argus sits
+            at the bottom of the window stack by design, and a tooltip is an
+            owned popup - which is exactly the kind of window that can end up
+            occluded by whatever is covering the panel. Expanding in place has
+            no such problem, and works the same in all three dock modes.
+        -->
+        <DataTemplate x:Key="SignalRowTemplate">
+            <!-- Hover AND click both reach the explanation. Two routes on
+                 purpose: a tooltip is an owned popup and this window lives at
+                 the bottom of the Z-order, so the popup can be occluded by
+                 whatever is covering the panel. Clicking expands in place and
+                 cannot be occluded by anything. -->
+            <Border Padding="12,4" Background="Transparent" x:Name="RowRoot"
+                    MouseLeftButtonUp="Row_Click" Cursor="Hand"
+                    ToolTip="{Binding Explain}"
+                    ToolTipService.InitialShowDelay="500"
+                    ToolTipService.ShowDuration="60000">
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Status dot. A 6px ellipse carries the whole state
+                             signal, which is why the text never repeats it. -->
+                        <Ellipse Grid.Column="0" Width="6" Height="6"
+                                 VerticalAlignment="Top" Margin="0,5,0,0"
+                                 Fill="{Binding State, Converter={StaticResource StateBrush}}" />
+
+                        <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                            <TextBlock Style="{StaticResource RowTitle}" Text="{Binding Title}" />
+                            <TextBlock Style="{StaticResource RowSub}" Text="{Binding Sub}"
+                                       Visibility="{Binding Sub, Converter={StaticResource EmptyHide}}" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Column="2" Style="{StaticResource RowDetail}"
+                                   Text="{Binding Detail}" VerticalAlignment="Top" Margin="0,1,0,0" />
+                    </Grid>
+
+                    <!-- The explanation. Collapsed costs nothing to keep here. -->
+                    <Border x:Name="Explanation" Visibility="Collapsed"
+                            Margin="14,6,0,6" Padding="10,8"
+                            Background="#0B131B"
+                            BorderBrush="{StaticResource AccentDim}" BorderThickness="1,0,0,0">
+                        <TextBlock Text="{Binding Explain}"
+                                   FontFamily="{StaticResource UiFont}"
+                                   FontSize="11" LineHeight="16"
+                                   Foreground="{StaticResource TextMid}"
+                                   TextWrapping="Wrap" />
+                    </Border>
+                </StackPanel>
+            </Border>
+
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                    <Setter TargetName="Explanation" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="RowRoot" Property="Background" Value="#0A121A" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding CanExpand}" Value="False">
+                    <Setter TargetName="RowRoot" Property="Cursor" Value="Arrow" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- A section renders itself and disappears when it has nothing to say. -->
+        <DataTemplate x:Key="SectionTemplate">
+            <StackPanel Visibility="{Binding IsVisible, Converter={StaticResource EmptyHide}}">
+                <Grid>
+                    <TextBlock Style="{StaticResource SectionHeader}" Text="{Binding Title}" />
+                    <Rectangle Height="1" Fill="{StaticResource RuleSoft}" VerticalAlignment="Bottom"
+                               Margin="12,0,12,4" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding Rows}"
+                              ItemTemplate="{StaticResource SignalRowTemplate}"
+                              VirtualizingPanel.IsVirtualizing="False" />
+            </StackPanel>
+        </DataTemplate>
+
+    </Window.Resources>
+
+    <Border BorderThickness="1" BorderBrush="{StaticResource Rule}" CornerRadius="6">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ============================================ header -->
+            <Border Grid.Row="0" x:Name="HeaderBar" Background="{StaticResource BgRaised}"
+                    MouseLeftButtonDown="Header_Drag">
+                <StackPanel Margin="0,0,0,10">
+
+                    <Grid Margin="12,10,10,0">
+                        <StackPanel Orientation="Horizontal">
+                            <!-- The eye. One glyph, drawn not animated. -->
+                            <Grid Width="16" Height="16" Margin="0,0,8,0">
+                                <Ellipse Width="14" Height="14" Stroke="{StaticResource Accent}"
+                                         StrokeThickness="1.2" />
+                                <Ellipse Width="5" Height="5" Fill="{StaticResource Accent}" />
+                            </Grid>
+
+                            <TextBlock Text="ARGUS" FontFamily="{StaticResource UiFont}"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextHi}"
+                                       VerticalAlignment="Center" />
+
+                            <TextBlock x:Name="ModeTag" Text="DESKTOP" Margin="8,1,0,0"
+                                       FontFamily="{StaticResource MonoFont}" FontSize="8"
+                                       Foreground="{StaticResource TextFaint}"
+                                       VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding Clock}" FontFamily="{StaticResource MonoFont}"
+                                       FontSize="12" Foreground="{StaticResource TextMid}"
+                                       VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <Button x:Name="SettingsButton" Style="{StaticResource GlyphButton}"
+                                    Content="MENU" Click="Settings_Click"
+                                    ToolTip="Settings. Position is not set here - just drag or resize the panel and it stays where you put it." />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- meters -->
+                    <Grid Margin="12,12,12,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="12" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding CpuText}" FontFamily="{StaticResource MonoFont}"
+                                       FontSize="10" Foreground="{StaticResource TextMid}" />
+                            <Grid x:Name="CpuTrack" Height="3" Margin="0,4,0,0"
+                                  Background="{StaticResource Rule}" HorizontalAlignment="Stretch">
+                                <Rectangle HorizontalAlignment="Left" Fill="{StaticResource Accent}">
+                                    <Rectangle.Width>
+                                        <MultiBinding Converter="{StaticResource FractionWidth}">
+                                            <Binding Path="CpuFraction" />
+                                            <Binding Path="ActualWidth" ElementName="CpuTrack" />
+                                        </MultiBinding>
+                                    </Rectangle.Width>
+                                </Rectangle>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="{Binding MemText}" FontFamily="{StaticResource MonoFont}"
+                                       FontSize="10" Foreground="{StaticResource TextMid}" />
+                            <Grid x:Name="MemTrack" Height="3" Margin="0,4,0,0"
+                                  Background="{StaticResource Rule}" HorizontalAlignment="Stretch">
+                                <Rectangle HorizontalAlignment="Left" Fill="{StaticResource Accent}">
+                                    <Rectangle.Width>
+                                        <MultiBinding Converter="{StaticResource FractionWidth}">
+                                            <Binding Path="MemFraction" />
+                                            <Binding Path="ActualWidth" ElementName="MemTrack" />
+                                        </MultiBinding>
+                                    </Rectangle.Width>
+                                </Rectangle>
+                            </Grid>
+                        </StackPanel>
+                    </Grid>
+
+                    <TextBlock Text="{Binding FootText}" Margin="12,8,12,0"
+                               FontFamily="{StaticResource MonoFont}" FontSize="9"
+                               Foreground="{StaticResource TextFaint}" />
+                </StackPanel>
+            </Border>
+
+            <!-- ============================================ signals -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+>
+                <ScrollViewer.Resources>
+                    <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinScrollBar}" />
+                </ScrollViewer.Resources>
+
+                <StackPanel Margin="0,0,0,12">
+                    <TextBlock Text="click any row to see what it means"
+                               FontFamily="{StaticResource UiFont}" FontSize="9"
+                               Foreground="{StaticResource TextFaint}"
+                               Margin="12,8,12,0" />
+                    <ContentPresenter Content="{Binding Services}"  ContentTemplate="{StaticResource SectionTemplate}" />
+                    <ContentPresenter Content="{Binding Schedule}"  ContentTemplate="{StaticResource SectionTemplate}" />
+                    <ContentPresenter Content="{Binding Claude}"    ContentTemplate="{StaticResource SectionTemplate}" />
+                    <ContentPresenter Content="{Binding Ghosts}"    ContentTemplate="{StaticResource SectionTemplate}" />
+                    <ContentPresenter Content="{Binding Processes}" ContentTemplate="{StaticResource SectionTemplate}" />
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- ============================================ footer -->
+            <Border Grid.Row="2" Background="{StaticResource BgRaised}" BorderThickness="0,1,0,0"
+                    BorderBrush="{StaticResource Rule}">
+                <Grid Margin="10,8,10,8">
+                    <StackPanel Orientation="Horizontal">
+                        <Button x:Name="OverlayButton" Style="{StaticResource GlyphButton}"
+                                Content="OVERLAY" Click="Overlay_Click" Margin="0,0,6,0"
+                                ToolTip="Bring Argus above every window, or send it back to the desktop layer" />
+                        <Button x:Name="ScreenButton" Style="{StaticResource GlyphButton}"
+                                Content="SCREEN" Click="Screen_Click" Margin="0,0,6,0"
+                                ToolTip="Move to the next display, keeping the same edge" />
+                    </StackPanel>
+
+                    <Button x:Name="RefreshButton" Style="{StaticResource GlyphButton}"
+                            Content="SCAN" Click="Refresh_Click" HorizontalAlignment="Right"
+                            ToolTip="Re-run every probe now" />
+                </Grid>
+            </Border>
+
+            <!-- ============================================ settings -->
+            <Border x:Name="SettingsPane" Grid.RowSpan="3" Background="{StaticResource Bg}"
+                    Visibility="Collapsed">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="12,12,10,10" Background="Transparent"
+                          MouseLeftButtonDown="Header_Drag">
+                        <TextBlock Text="SETTINGS" FontFamily="{StaticResource UiFont}" FontSize="12"
+                                   FontWeight="SemiBold" Foreground="{StaticResource TextHi}"
+                                   VerticalAlignment="Center" />
+                        <Button Style="{StaticResource GlyphButton}" Content="CLOSE"
+                                HorizontalAlignment="Right" Click="Settings_Click" />
+                    </Grid>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <ScrollViewer.Resources>
+                            <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinScrollBar}" />
+                        </ScrollViewer.Resources>
+
+                        <StackPanel Margin="12,0,12,16">
+
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="HOW IT SITS" Margin="0,4,0,6" />
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <ToggleButton x:Name="ModeDesktop" Style="{StaticResource ToggleChip}"
+                                              Content="DESKTOP" Margin="0,0,4,0" Click="Mode_Click" Tag="Desktop" />
+                                <ToggleButton x:Name="ModeOverlay" Style="{StaticResource ToggleChip}"
+                                              Content="ON TOP" Margin="0,0,4,0" Click="Mode_Click" Tag="Overlay" />
+                                <ToggleButton x:Name="ModeReserve" Style="{StaticResource ToggleChip}"
+                                              Content="RESERVE" Click="Mode_Click" Tag="Reserve" />
+                            </StackPanel>
+                            <TextBlock x:Name="ModeHelp" Style="{StaticResource RowSub}" TextWrapping="Wrap"
+                                       Margin="0,2,0,0" />
+
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="WHICH EDGE" Margin="0,14,0,6" />
+                            <StackPanel Orientation="Horizontal">
+                                <ToggleButton x:Name="EdgeLeft" Style="{StaticResource ToggleChip}"
+                                              Content="LEFT" Margin="0,0,4,0" Click="Edge_Click" Tag="Left" />
+                                <ToggleButton x:Name="EdgeRight" Style="{StaticResource ToggleChip}"
+                                              Content="RIGHT" Click="Edge_Click" Tag="Right" />
+                                <Button Style="{StaticResource GlyphButton}" Content="NEXT SCREEN"
+                                        Margin="10,0,0,0" Click="Screen_Click" />
+                            </StackPanel>
+                            <TextBlock x:Name="ScreenHelp" Style="{StaticResource RowSub}" TextWrapping="Wrap"
+                                       Margin="0,6,0,0" />
+                            <TextBlock Style="{StaticResource RowSub}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Text="Drag the header to move it, drag an edge to resize. Wherever you leave it is where it stays, including after a restart. These buttons are only for snapping it back to a full-height edge." />
+
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="SIZE AND FADE" Margin="0,14,0,6" />
+                            <TextBlock x:Name="WidthLabel" Style="{StaticResource RowSub}" />
+                            <Slider x:Name="WidthSlider" Minimum="220" Maximum="600" TickFrequency="10"
+                                    IsSnapToTickEnabled="True" Margin="0,2,0,6"
+                                    ValueChanged="Width_Changed" />
+                            <TextBlock x:Name="OpacityLabel" Style="{StaticResource RowSub}" />
+                            <Slider x:Name="OpacitySlider" Minimum="0.35" Maximum="1.0" TickFrequency="0.01"
+                                    IsSnapToTickEnabled="True" Margin="0,2,0,0"
+                                    ValueChanged="Opacity_Changed" />
+
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="WHAT IT WATCHES" Margin="0,14,0,6" />
+                            <CheckBox x:Name="GhostCheck" Content="Catch console windows"
+                                      Foreground="{StaticResource TextMid}" FontSize="11"
+                                      FontFamily="{StaticResource UiFont}" Margin="0,0,0,6"
+                                      Click="Ghost_Click" />
+                            <CheckBox x:Name="ClaudeCheck" Content="Show Claude Code activity"
+                                      Foreground="{StaticResource TextMid}" FontSize="11"
+                                      FontFamily="{StaticResource UiFont}" Margin="0,0,0,6"
+                                      Click="Claude_Click" />
+                            <CheckBox x:Name="StartupCheck" Content="Start with Windows"
+                                      Foreground="{StaticResource TextMid}" FontSize="11"
+                                      FontFamily="{StaticResource UiFont}"
+                                      Click="Startup_Click" />
+
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="HOW OFTEN" Margin="0,14,0,6" />
+                            <TextBlock x:Name="IntervalLabel" Style="{StaticResource RowSub}" />
+                            <Slider x:Name="IntervalSlider" Minimum="2" Maximum="30" TickFrequency="1"
+                                    IsSnapToTickEnabled="True" Margin="0,2,0,0"
+                                    ValueChanged="Interval_Changed" />
+                            <TextBlock Style="{StaticResource RowSub}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Text="Lower is not better. Nothing on this list changes faster than a second or two, and every sweep is a reason for the CPU to wake up." />
+
+                            <TextBlock Style="{StaticResource SectionHeader}" Text="FILES" Margin="0,14,0,6" />
+                            <StackPanel Orientation="Horizontal">
+                                <Button Style="{StaticResource GlyphButton}" Content="SETTINGS.JSON"
+                                        Margin="0,0,4,0" Click="OpenSettingsFile_Click" />
+                                <Button Style="{StaticResource GlyphButton}" Content="LOG"
+                                        Click="OpenLog_Click" />
+                            </StackPanel>
+
+                            <Rectangle Height="1" Fill="{StaticResource Rule}" Margin="0,18,0,12" />
+
+                            <Button Style="{StaticResource GlyphButton}" Content="SHUT ARGUS DOWN"
+                                    Foreground="{StaticResource Danger}" Click="Quit_Click"
+                                    HorizontalAlignment="Left" />
+                            <TextBlock Style="{StaticResource RowSub}" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Text="Closes the panel and the tray icon. It comes back at next login unless Start with Windows is off." />
+
+                            <TextBlock x:Name="VersionLabel" Style="{StaticResource RowSub}" Margin="0,14,0,0" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

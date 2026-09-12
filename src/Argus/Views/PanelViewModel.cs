@@ -1,0 +1,189 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using Argus.Probes;
+
+namespace Argus.Views;
+
+/// <summary>One rendered row. Mutable so the list can be updated in place.</summary>
+public sealed class SignalRow : INotifyPropertyChanged
+{
+    public string Id { get; }
+
+    private string _title = "";
+    private string _detail = "";
+    private string? _sub;
+    private SignalState _state;
+    private int _pid;
+    private string? _explain;
+    private bool _expanded;
+
+    public SignalRow(Signal s)
+    {
+        Id = s.Id;
+        Apply(s);
+    }
+
+    public string Title { get => _title; private set => Set(ref _title, value); }
+    public string Detail { get => _detail; private set => Set(ref _detail, value); }
+    public string? Sub { get => _sub; private set => Set(ref _sub, value); }
+    public SignalState State { get => _state; private set => Set(ref _state, value); }
+    public int Pid { get => _pid; private set => Set(ref _pid, value); }
+    public string? Explain { get => _explain; private set => Set(ref _explain, value); }
+
+    /// <summary>
+    /// Whether this row is showing its explanation.
+    ///
+    /// Lives on the row rather than in the panel, and survives every refresh
+    /// for free: rows are reconciled by id, so an expanded row stays expanded
+    /// while its numbers keep updating underneath.
+    /// </summary>
+    public bool IsExpanded
+    {
+        get => _expanded;
+        set => Set(ref _expanded, value);
+    }
+
+    /// <summary>True when there is an explanation worth expanding to.</summary>
+    public bool CanExpand => !string.IsNullOrWhiteSpace(_explain);
+
+    public bool HasSub => !string.IsNullOrWhiteSpace(_sub);
+
+    public void Apply(Signal s)
+    {
+        Title = s.Title;
+        Detail = s.Detail;
+        Sub = s.Sub;
+        State = s.State;
+        Pid = s.Pid;
+        Explain = s.Explain;
+        OnPropertyChanged(nameof(HasSub));
+        OnPropertyChanged(nameof(CanExpand));
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        OnPropertyChanged(name);
+    }
+
+    private void OnPropertyChanged(string? name) =>
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+/// <summary>
+/// One titled block on the panel.
+///
+/// Rows are reconciled by id rather than cleared and refilled. Clearing an
+/// ObservableCollection every three seconds throws away every container WPF
+/// built, forces a full re-layout, and makes the list flicker and lose its
+/// scroll position. Reconciling touches only what actually changed, which on a
+/// quiet machine is nothing at all.
+/// </summary>
+public sealed class Section : INotifyPropertyChanged
+{
+    private readonly SignalGroup _group;
+    private bool _visible;
+
+    public Section(string title, SignalGroup group)
+    {
+        Title = title;
+        _group = group;
+    }
+
+    public string Title { get; }
+    public ObservableCollection<SignalRow> Rows { get; } = [];
+
+    public bool IsVisible
+    {
+        get => _visible;
+        private set
+        {
+            if (_visible == value) return;
+            _visible = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsVisible)));
+        }
+    }
+
+    public void Sync(IReadOnlyList<Signal> all)
+    {
+        var incoming = all.Where(s => s.Group == _group)
+                          .OrderBy(s => s.Order)
+                          .ToList();
+
+        // Update or insert, in order.
+        for (var i = 0; i < incoming.Count; i++)
+        {
+            var s = incoming[i];
+            var existingIndex = IndexOf(s.Id);
+
+            if (existingIndex < 0)
+            {
+                Rows.Insert(Math.Min(i, Rows.Count), new SignalRow(s));
+            }
+            else
+            {
+                Rows[existingIndex].Apply(s);
+                if (existingIndex != i) Rows.Move(existingIndex, Math.Min(i, Rows.Count - 1));
+            }
+        }
+
+        // Drop anything that went away.
+        for (var i = Rows.Count - 1; i >= incoming.Count; i--) Rows.RemoveAt(i);
+
+        IsVisible = Rows.Count > 0;
+    }
+
+    private int IndexOf(string id)
+    {
+        for (var i = 0; i < Rows.Count; i++)
+            if (Rows[i].Id == id) return i;
+        return -1;
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+}
+
+public sealed class PanelViewModel : INotifyPropertyChanged
+{
+    public Section Services { get; } = new("SERVICES", SignalGroup.Service);
+    public Section Schedule { get; } = new("SCHEDULE", SignalGroup.Schedule);
+    public Section Claude   { get; } = new("CLAUDE CODE", SignalGroup.Claude);
+    public Section Ghosts   { get; } = new("CAUGHT WINDOWS", SignalGroup.Ghost);
+    public Section Processes { get; } = new("PROCESSES", SignalGroup.Process);
+
+    private string _clock = "";
+    private string _cpuText = "";
+    private string _memText = "";
+    private string _footText = "";
+    private double _cpuFraction;
+    private double _memFraction;
+
+    public string Clock { get => _clock; set => Set(ref _clock, value); }
+    public string CpuText { get => _cpuText; set => Set(ref _cpuText, value); }
+    public string MemText { get => _memText; set => Set(ref _memText, value); }
+    public string FootText { get => _footText; set => Set(ref _footText, value); }
+    public double CpuFraction { get => _cpuFraction; set => Set(ref _cpuFraction, value); }
+    public double MemFraction { get => _memFraction; set => Set(ref _memFraction, value); }
+
+    public void Sync(IReadOnlyList<Signal> signals)
+    {
+        Services.Sync(signals);
+        Schedule.Sync(signals);
+        Claude.Sync(signals);
+        Ghosts.Sync(signals);
+        Processes.Sync(signals);
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+}

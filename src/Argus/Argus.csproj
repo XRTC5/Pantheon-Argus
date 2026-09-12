@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <!--
+      No UseWindowsForms. It was referenced only for NotifyIcon and Screen;
+      once the GPU drivers were dropped it was the largest module left in the
+      process. Both are now done with direct Win32 calls, which also removes
+      the WPF/WinForms type collisions that needed global aliases.
+    -->
+    <AssemblyName>Argus</AssemblyName>
+    <RootNamespace>Argus</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>argus.ico</ApplicationIcon>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+  </PropertyGroup>
+
+  <!--
+    Memory discipline. The framework sets the floor, not our code, so these
+    knobs are the ones that actually move the number:
+      ServerGC allocates a heap and a GC thread PER CORE. On a 16-thread i9
+      that alone is tens of MB for an app that allocates almost nothing.
+      Concurrent GC adds a permanent background thread we have no use for.
+      TieredCompilation keeps startup JIT cheap; we never get hot enough
+      for the full JIT to pay for itself.
+  -->
+  <PropertyGroup>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <RetainVMGarbageCollection>false</RetainVMGarbageCollection>
+    <TieredCompilation>true</TieredCompilation>
+    <TieredPGO>true</TieredPGO>
+    <!--
+      InvariantGlobalization and UseSystemResourceKeys are NOT set.
+      Both are standard size knobs for console and server apps, and both are
+      wrong here: WPF's font fallback and text shaping need real culture data,
+      and turning them on makes it throw TypeInitializationException out of
+      MS.Internal.FontCache before the first frame is drawn.
+    -->
+    <AutoreleasePoolSupport>false</AutoreleasePoolSupport>
+    <EventSourceSupport>false</EventSourceSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Task Scheduler COM interop, for "when does the next scheduled job run". -->
+    <PackageReference Include="TaskScheduler" Version="2.11.0" />
+  </ItemGroup>
+
+</Project>
