@@ -21,6 +21,24 @@ Named for the hundred-eyed giant who was set to watch and never slept.
 The header carries machine CPU and RAM, the process count, and Argus's own
 working set — a watchman that will not be watched is not one to trust.
 
+## Starting and stopping
+
+Service rows carry a **START** or **STOP** button when they are configured for
+it. Give a target a `StartCommand` in `settings.json` and Argus will run it -
+a `.cmd` or `.bat` goes through `cmd.exe` with no window, so starting a service
+never flashes the kind of console this tool exists to hunt. With no
+`StartCommand` but a `ScheduledTask`, Start runs the task instead. With neither,
+there is no button: Argus never guesses how to start something.
+
+**Stop kills whatever owns the port**, not whatever matched a name. That
+distinction was learned by getting it wrong. Launcher scripts commonly use
+`start` to detach the real server, so the server is not a child of the script -
+killing the matched process tree left the port held and the service merrily
+running. And a command-line substring match will happily catch an unrelated
+shell that merely mentions the path. Whoever holds the socket is the service, by
+definition; nothing else is. After killing, Argus waits for the port to actually
+release and says so if it does not, rather than claiming success.
+
 ## How it sits
 
 Three modes, switched in Settings or from the tray:

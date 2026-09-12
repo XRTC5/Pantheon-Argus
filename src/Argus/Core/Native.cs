@@ -379,6 +379,68 @@ internal static class Native
     [DllImport("user32.dll", EntryPoint = "GetMonitorInfoW", CharSet = CharSet.Unicode)]
     public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX info);
 
+    // ------------------------------------------------------------ tcp owners
+    // Which process owns a listening port. IPGlobalProperties can list the
+    // ports but not who holds them, and "stop this service" means stopping
+    // whatever is actually holding the socket - not whatever happened to match
+    // a substring of a command line.
+
+    public const int AF_INET = 2;
+    public const int TCP_TABLE_OWNER_PID_LISTENER = 3;
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MIB_TCPROW_OWNER_PID
+    {
+        public uint state;
+        public uint localAddr;
+        public byte localPort1, localPort2, localPort3, localPort4;
+        public uint remoteAddr;
+        public byte remotePort1, remotePort2, remotePort3, remotePort4;
+        public uint owningPid;
+
+        /// <summary>The port is big-endian in the first two bytes of the field.</summary>
+        public readonly int LocalPort => (localPort1 << 8) | localPort2;
+    }
+
+    [DllImport("iphlpapi.dll", SetLastError = true)]
+    public static extern uint GetExtendedTcpTable(IntPtr pTcpTable, ref int dwOutBufLen,
+                                                  bool sort, int ipVersion,
+                                                  int tblClass, int reserved);
+
+    /// <summary>Process id listening on a local TCP port, or 0 if nothing is.</summary>
+    public static int PidListeningOn(int port)
+    {
+        var size = 0;
+        GetExtendedTcpTable(IntPtr.Zero, ref size, false, AF_INET,
+                            TCP_TABLE_OWNER_PID_LISTENER, 0);
+        if (size <= 0) return 0;
+
+        var buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            if (GetExtendedTcpTable(buffer, ref size, false, AF_INET,
+                                    TCP_TABLE_OWNER_PID_LISTENER, 0) != 0)
+            {
+                return 0;
+            }
+
+            var count = Marshal.ReadInt32(buffer);
+            var rowSize = Marshal.SizeOf<MIB_TCPROW_OWNER_PID>();
+            var ptr = buffer + 4;
+
+            for (var i = 0; i < count; i++)
+            {
+                var row = Marshal.PtrToStructure<MIB_TCPROW_OWNER_PID>(ptr);
+                if (row.LocalPort == port) return (int)row.owningPid;
+                ptr += rowSize;
+            }
+        }
+        catch { /* a port we cannot resolve simply has no owner */ }
+        finally { Marshal.FreeHGlobal(buffer); }
+
+        return 0;
+    }
+
     // ---------------------------------------------------------------- system
 
     [StructLayout(LayoutKind.Sequential)]

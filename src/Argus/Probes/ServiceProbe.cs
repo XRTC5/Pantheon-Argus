@@ -56,7 +56,19 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
             if (target.Port == 0 && string.IsNullOrEmpty(target.ProcessMatch)) continue;
 
             var portOpen = target.Port != 0 && listening.Contains(target.Port);
-            var proc = string.IsNullOrEmpty(target.ProcessMatch)
+
+            // Prefer whoever actually holds the socket. A command-line match is
+            // a guess that can catch an unrelated shell; the port owner is the
+            // service by definition. The match is only a fallback for targets
+            // with no port at all.
+            ProcInfo? proc = null;
+            if (portOpen)
+            {
+                var ownerPid = Native.PidListeningOn(target.Port);
+                if (ownerPid != 0) scanner.Current.TryGetValue(ownerPid, out proc);
+            }
+
+            proc ??= string.IsNullOrEmpty(target.ProcessMatch)
                 ? null
                 : scanner.FindByCommandLine(target.ProcessMatch);
 
@@ -113,8 +125,17 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
                 ? $"Process {Trim(proc.Name)}, pid {proc.Pid}"
                 : "Process not running");
 
+            // Running things get a Stop, stopped things get a Start, and a
+            // target Argus has no way to start or find offers neither.
+            var running = proc is not null || portOpen;
+            var control = running
+                ? (ServiceControl.CanStop(target) ? ControlAction.Stop : ControlAction.None)
+                : (ServiceControl.CanStart(target) ? ControlAction.Start : ControlAction.None);
+
             results.Add(new Signal
             {
+                Control = control,
+                ControlTarget = target.Name,
                 Explain = explain.ToString().TrimEnd(),
                 Id = "svc:" + target.Name,
                 Group = SignalGroup.Service,

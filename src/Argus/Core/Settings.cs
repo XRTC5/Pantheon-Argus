@@ -56,6 +56,22 @@ public sealed class WatchTarget
     /// <summary>Substring matched against process command lines to find the live process.</summary>
     public string? ProcessMatch { get; set; }
 
+    /// <summary>
+    /// What to run to start this. A .cmd or .bat is run through cmd with no
+    /// window; anything else is launched directly.
+    ///
+    /// Leave it empty and the Start button falls back to running ScheduledTask,
+    /// if one is set. Leave both empty and there is no Start button - Argus
+    /// never guesses how to start something.
+    /// </summary>
+    public string? StartCommand { get; set; }
+
+    /// <summary>Arguments for StartCommand. Optional.</summary>
+    public string? StartArgs { get; set; }
+
+    /// <summary>Working directory. Defaults to the folder StartCommand lives in.</summary>
+    public string? WorkingDirectory { get; set; }
+
     public bool Enabled { get; set; } = true;
 }
 
@@ -201,6 +217,7 @@ public sealed class ArgusSettings
     [
         new() { Name = "Web app", Note = "local dev server", Port = 3000,
                 HealthPath = "/", ProcessMatch = "node",
+                StartCommand = @"C:\path\to\your\start.cmd",
                 What = "Example target. A development server on port 3000, matched to whichever "
                      + "node process has that port open. Edit or delete this in settings.json." },
 

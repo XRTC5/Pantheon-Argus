@@ -233,6 +233,35 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    /// <summary>
+    /// Start or stop the service on this row.
+    ///
+    /// The pid handed to Stop is the one already displayed, not a fresh search,
+    /// so what gets stopped is exactly what was on screen when the button was
+    /// pressed.
+    /// </summary>
+    private void Control_Click(object sender, RoutedEventArgs e)
+    {
+        // Marked handled so pressing the button does not also toggle the row.
+        e.Handled = true;
+
+        if ((sender as FrameworkElement)?.DataContext is not SignalRow row) return;
+        if (row.ControlTarget is null) return;
+
+        var target = _settings.Targets.FirstOrDefault(t => t.Name == row.ControlTarget);
+        if (target is null) return;
+
+        var result = row.Control == ControlAction.Start
+            ? ServiceControl.Start(target)
+            : ServiceControl.Stop(target, row.Pid);
+
+        // Say what happened on the row itself rather than in a dialog, and let
+        // the next sweep replace it with the truth a few seconds later.
+        row.Note(result);
+
+        _host?.RefreshNow();
+    }
+
     private void Overlay_Click(object sender, RoutedEventArgs e) => ToggleOverlay();
 
     private void Screen_Click(object sender, RoutedEventArgs e)

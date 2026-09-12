@@ -17,6 +17,8 @@ public sealed class SignalRow : INotifyPropertyChanged
     private int _pid;
     private string? _explain;
     private bool _expanded;
+    private ControlAction _control;
+    private string? _controlTarget;
 
     public SignalRow(Signal s)
     {
@@ -47,7 +49,29 @@ public sealed class SignalRow : INotifyPropertyChanged
     /// <summary>True when there is an explanation worth expanding to.</summary>
     public bool CanExpand => !string.IsNullOrWhiteSpace(_explain);
 
+    public ControlAction Control { get => _control; private set => Set(ref _control, value); }
+    public string? ControlTarget { get => _controlTarget; private set => Set(ref _controlTarget, value); }
+
+    /// <summary>Button caption, and empty when there is no button.</summary>
+    public string ControlText => _control switch
+    {
+        ControlAction.Start => "START",
+        ControlAction.Stop  => "STOP",
+        _ => "",
+    };
+
+    public bool HasControl => _control != ControlAction.None;
+
     public bool HasSub => !string.IsNullOrWhiteSpace(_sub);
+
+    /// <summary>
+    /// Shows a one-off message in place of the subtitle - "stopped",
+    /// "started (pid 1234)", or why it did not work.
+    ///
+    /// Deliberately not sticky: the next probe sweep overwrites it with real
+    /// state a few seconds later, which is the answer that actually matters.
+    /// </summary>
+    public void Note(string message) => Sub = message;
 
     public void Apply(Signal s)
     {
@@ -57,8 +81,12 @@ public sealed class SignalRow : INotifyPropertyChanged
         State = s.State;
         Pid = s.Pid;
         Explain = s.Explain;
+        Control = s.Control;
+        ControlTarget = s.ControlTarget;
         OnPropertyChanged(nameof(HasSub));
         OnPropertyChanged(nameof(CanExpand));
+        OnPropertyChanged(nameof(ControlText));
+        OnPropertyChanged(nameof(HasControl));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

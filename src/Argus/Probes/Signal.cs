@@ -13,6 +13,14 @@ public enum SignalState
     Bad,
 }
 
+/// <summary>What button, if any, this row offers.</summary>
+public enum ControlAction
+{
+    None,
+    Start,
+    Stop,
+}
+
 public enum SignalGroup
 {
     Service,
@@ -59,4 +67,10 @@ public sealed record Signal
     /// is the handle; this is the explanation.
     /// </summary>
     public string? Explain { get; init; }
+
+    /// <summary>Which button this row shows. None for anything not controllable.</summary>
+    public ControlAction Control { get; init; } = ControlAction.None;
+
+    /// <summary>The watch target this row controls, by name.</summary>
+    public string? ControlTarget { get; init; }
 }
