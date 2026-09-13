@@ -108,8 +108,10 @@ public sealed class ProcessProbe(ArgusSettings settings, ProcessScanner scanner)
         // ------------------------------------------------------------- ghosts
         if (settings.GhostCatcher)
         {
-            var ghosts = scanner.RecentSpawns
-                .Where(s => s.IsConsole)
+            // ConsoleSpawns drops the conhost that every console process
+            // drags in with it, so one script running once is one line rather
+            // than two describing the same event.
+            var ghosts = scanner.ConsoleSpawns()
                 .OrderByDescending(s => s.At)
                 .Take(8);
 
@@ -121,12 +123,16 @@ public sealed class ProcessProbe(ArgusSettings settings, ProcessScanner scanner)
                     Explain = ExplainGhost(g),
                     Id = $"ghost:{g.Pid}",
                     Group = SignalGroup.Ghost,
-                    Title = Strip(g.Name),
+                    Title = TitleOf(g),
                     Detail = Ago(g.At),
                     Sub = Describe(g),
-                    // A console that appears unbidden is the thing being hunted,
-                    // so it is flagged rather than merely listed.
-                    State = SignalState.Warn,
+                    // A console that appeared on this desktop is the thing
+                    // being hunted, and is flagged. One in another session
+                    // could not have been seen by anybody - it is listed as
+                    // background work, not raised as something that happened
+                    // to you. Flagging those is how a watchman teaches its
+                    // owner to stop reading it.
+                    State = g.OnOurDesktop ? SignalState.Warn : SignalState.Idle,
                     At = g.At,
                     Pid = g.Pid,
                     Order = gOrder++,
@@ -144,12 +150,46 @@ public sealed class ProcessProbe(ArgusSettings settings, ProcessScanner scanner)
     private static string ExplainGhost(SpawnRecord g)
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"A console window appeared at {g.At:HH:mm:ss}.");
+
+        // The first line is the finding, and for a long time it was wrong.
+        // Argus does not watch windows here - it watches for console host
+        // processes appearing, and calls that a window. In session 0 there is
+        // no desktop to draw on, so the same evidence means the opposite
+        // thing: work ran quietly, exactly as intended.
+        if (g.OnOurDesktop)
+        {
+            sb.AppendLine($"A console opened on your desktop at {g.At:HH:mm:ss}.");
+        }
+        else if (g.SessionId == 0)
+        {
+            sb.AppendLine($"Background work started at {g.At:HH:mm:ss}. Nothing appeared on screen.");
+            sb.AppendLine();
+            sb.AppendLine("It runs in session 0, the service session, which has no desktop at all - "
+                        + "a window there is not hidden, it is impossible. This is what a correctly "
+                        + "configured scheduled task looks like.");
+        }
+        else
+        {
+            sb.AppendLine($"A console started at {g.At:HH:mm:ss} in another session (session "
+                        + $"{(g.SessionId < 0 ? "unknown" : g.SessionId.ToString())}), "
+                        + "so it was not on your desktop.");
+        }
+
         sb.AppendLine();
+
+        if (!string.IsNullOrEmpty(g.TaskName))
+            sb.AppendLine($"Scheduled task:  {g.TaskName}");
+
         sb.AppendLine($"Program:  {g.Name}  (pid {g.Pid})");
-        sb.AppendLine(string.IsNullOrEmpty(g.ParentName)
-            ? $"Started by:  pid {g.ParentPid}"
-            : $"Started by:  {g.ParentName}  (pid {g.ParentPid})");
+
+        // Naming the service host as the parent is technically true and
+        // practically useless, so where a task is known it is named instead.
+        if (!string.IsNullOrEmpty(g.TaskName) && ScheduledTasks.IsSchedulerHost(g.ParentName))
+            sb.AppendLine($"Started by:  the Task Scheduler, via {Strip(g.ParentName)} (pid {g.ParentPid})");
+        else
+            sb.AppendLine(string.IsNullOrEmpty(g.ParentName)
+                ? $"Started by:  pid {g.ParentPid}"
+                : $"Started by:  {g.ParentName}  (pid {g.ParentPid})");
 
         if (!string.IsNullOrWhiteSpace(g.CommandLine))
         {
@@ -160,22 +200,58 @@ public sealed class ProcessProbe(ArgusSettings settings, ProcessScanner scanner)
         else
         {
             sb.AppendLine();
-            sb.AppendLine("No command line readable - it had already exited, or it belongs to another user.");
+            sb.AppendLine(g.SessionId == 0
+                ? "The command line is not readable from here: a session 0 process runs under a "
+                  + "token this panel cannot open. The task name above is the better answer anyway."
+                : "No command line readable - it had already exited, or it belongs to another user.");
         }
 
         return sb.ToString().TrimEnd();
     }
 
+    /// <summary>
+    /// What to call a caught console.
+    ///
+    /// "conhost" is the answer to a question nobody asked. It is the window
+    /// host Windows attaches to a console, so it is present at every one of
+    /// these events and identifies none of them. Where its parent survived
+    /// long enough to be named, the parent is the program that actually ran.
+    /// </summary>
+    private static string TitleOf(SpawnRecord g)
+    {
+        if (!g.Name.Equals("conhost.exe", StringComparison.OrdinalIgnoreCase))
+            return Strip(g.Name);
+
+        return string.IsNullOrEmpty(g.ParentName)
+            ? "console"
+            : $"console for {Strip(g.ParentName)}";
+    }
+
     private static string Describe(SpawnRecord g)
     {
+        // A named task beats a parent every time. "from svchost (2444)" is the
+        // line that made this whole section unreadable.
+        if (!string.IsNullOrEmpty(g.TaskName))
+            return g.OnOurDesktop
+                ? $"scheduled task {g.TaskName}"
+                : $"scheduled task {g.TaskName} : session 0, no window";
+
         var parent = string.IsNullOrEmpty(g.ParentName)
             ? $"pid {g.ParentPid}"
             : $"{Strip(g.ParentName)} ({g.ParentPid})";
 
-        if (string.IsNullOrWhiteSpace(g.CommandLine)) return $"from {parent}";
+        var where = g.OnOurDesktop ? "" : " : session 0, no window";
+        if (g.SessionId > 0 && !g.OnOurDesktop) where = $" : session {g.SessionId}";
+
+        // A conhost's own command line is the console handle it was passed and
+        // nothing else - it is never the answer to "what ran". The title
+        // already names the parent, so the line stays with who started it.
+        var isHost = g.Name.Equals("conhost.exe", StringComparison.OrdinalIgnoreCase);
+
+        if (isHost || string.IsNullOrWhiteSpace(g.CommandLine)) return $"from {parent}{where}";
 
         var cmd = g.CommandLine.Length > 90 ? g.CommandLine[..90] + "..." : g.CommandLine;
-        return $"from {parent} : {cmd}";
+        return $"from {parent} : {cmd}{where}";
     }
 
     private static string Strip(string exe) =>

@@ -61,6 +61,20 @@ public sealed class EmptyToCollapsedConverter : IValueConverter
 }
 
 /// <summary>
+/// Tree depth to indent. The breakdown shows a real process tree, and an
+/// indent is the only thing that makes "this was started by that" readable
+/// without drawing lines between rows.
+/// </summary>
+public sealed class DepthToMarginConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is int depth ? new Thickness(Math.Clamp(depth, 0, 8) * 12, 0, 0, 0) : new Thickness(0);
+
+    public object ConvertBack(object? value, Type t, object? p, CultureInfo c) =>
+        throw new NotSupportedException();
+}
+
+/// <summary>
 /// Turns a 0..1 fraction into a pixel width against the bar track, so the
 /// meters fill correctly at any panel width without a layout pass per tick.
 /// </summary>

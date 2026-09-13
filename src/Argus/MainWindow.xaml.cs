@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -16,6 +17,13 @@ public partial class MainWindow : Window
     private readonly ProcessScanner _scanner = new();
 
     private DockManager? _dock;
+    private BreakdownWindow? _breakdown;
+
+    /// <summary>Set while Argus is shutting down, so the breakdown really closes.</summary>
+    private bool _closing;
+
+    /// <summary>True while a breakdown is being assembled on a background thread.</summary>
+    private volatile bool _detailBusy;
     private ProbeHost? _host;
     private TrayIcon? _tray;
     private DispatcherTimer? _tick;
@@ -109,7 +117,115 @@ public partial class MainWindow : Window
         }
 
         _vm.Sync(signals);
+
+        // The breakdown is live while it is open: a tree that stops updating
+        // the moment you look at it is a screenshot, not a panel.
+        if (_breakdown?.IsVisible == true) RefreshDetail();
     }
+
+    // ------------------------------------------------------------ breakdown
+
+    /// <summary>
+    /// Opens the pane that shows what a row is actually made of - the process
+    /// tree under it, the consoles it opened, the task that owns it.
+    ///
+    /// The panel groups by kind, which is right for a glance and wrong for a
+    /// question: one piece of work appears in three sections and reads as
+    /// three unrelated things. This is the view that puts it back together.
+    /// </summary>
+    private void Breakdown_Click(object sender, RoutedEventArgs e)
+    {
+        // Handled, so opening the breakdown does not also collapse the
+        // explanation the button is sitting in.
+        e.Handled = true;
+
+        if ((sender as FrameworkElement)?.DataContext is not SignalRow row) return;
+
+        _vm.Detail.Open(row.Id, row.Title);
+        RefreshDetail();
+
+        if (_breakdown is null)
+        {
+            _breakdown = new BreakdownWindow(_vm.Detail, _settings);
+
+            // Hidden rather than closed, every time. A closed WPF window cannot
+            // be shown again, and this one is opened and dismissed casually.
+            _breakdown.Closing += (_, args) =>
+            {
+                if (_closing) return;
+                args.Cancel = true;
+                _breakdown.Hide();
+            };
+
+            _breakdown.PlaceNear(this);
+        }
+        else if (!_breakdown.IsVisible)
+        {
+            _breakdown.PlaceNear(this);
+        }
+
+        _breakdown.Show();
+        _breakdown.Activate();
+    }
+
+    /// <summary>
+    /// Rebuilds the open breakdown, off the UI thread.
+    ///
+    /// Off-thread because assembling one is not free: it reads the process
+    /// table, walks a tree, and asks Task Scheduler which tasks are running -
+    /// a COM enumeration. Doing that on the dispatcher every few seconds is
+    /// how a panel that boasts about costing nothing starts costing something,
+    /// and it would stutter the whole window while it ran.
+    /// </summary>
+    private void RefreshDetail()
+    {
+        // One build at a time. If a sweep lands while the last one is still
+        // going, skip it - the next sweep is three seconds away and the answer
+        // would be the same.
+        if (_detailBusy) return;
+        _detailBusy = true;
+
+        var rowId = _vm.Detail.RowId;
+        var rowTitle = _vm.Detail.RowTitle;
+
+        Task.Run(() =>
+        {
+            BreakdownReport? report = null;
+
+            try
+            {
+                report = Breakdown.Build(rowId, rowTitle, _settings, _scanner);
+            }
+            catch (Exception ex)
+            {
+                // A breakdown that throws must not take the panel with it. The
+                // window stays open showing whatever it last managed to build.
+                Log.Error("breakdown failed", ex);
+            }
+
+            try
+            {
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+                {
+                    _detailBusy = false;
+
+                    // Dropped if the user has moved on to another row while
+                    // this was building; that row's own build is already on
+                    // its way.
+                    if (report is not null && _vm.Detail.RowId == rowId) _vm.Detail.Show(report);
+                }));
+            }
+            catch (Exception)
+            {
+                // The dispatcher is shutting down. Clear the flag here instead,
+                // so a build cannot be left permanently blocked by a marshal
+                // that never arrived.
+                _detailBusy = false;
+            }
+        });
+    }
+
+
 
     private void UpdateHeader()
     {
@@ -454,9 +570,18 @@ public partial class MainWindow : Window
     private void Quit()
     {
         Log.Info("argus shutting down");
+        _closing = true;
         _tick?.Stop();
         _host?.Dispose();
         _tray?.Dispose();
+
+        // Where the breakdown window was left is only in memory until now; a
+        // drag does not deserve a file write per pixel.
+        if (_breakdown is not null)
+        {
+            _settings.Save();
+            _breakdown.Close();
+        }
 
         // Unregisters the appbar. Skipping this leaves a permanent dead strip
         // of reserved desktop that survives the process and needs a shell

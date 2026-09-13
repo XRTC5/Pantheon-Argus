@@ -114,6 +114,19 @@ public sealed class ArgusSettings
 
     public double Opacity { get; set; } = 0.96;
 
+    // ---- breakdown window -----------------------------------------------
+    //
+    // Where the "what is under this" window was last left, in logical pixels.
+    // Logical rather than physical, unlike the panel's own placement: this
+    // window is dragged by hand to wherever suits and is never positioned by
+    // calculation, so WPF's own coordinates are the ones that round-trip.
+
+    public bool HasBreakdownPlacement { get; set; }
+    public double BreakdownLeft { get; set; }
+    public double BreakdownTop { get; set; }
+    public double BreakdownWidth { get; set; }
+    public double BreakdownHeight { get; set; }
+
     public bool RunOnStartup { get; set; } = true;
 
     // ------------------------------------------------------------ behaviour

@@ -266,6 +266,28 @@ internal static class Native
     public static extern bool GetProcessTimes(IntPtr hProcess, out long creation, out long exit,
                                               out long kernel, out long user);
 
+    /// <summary>
+    /// When a process started, as a raw file time, or 0 when it cannot be read.
+    ///
+    /// Zero is common and not an error: a process belonging to another user or
+    /// to session 0 refuses the handle. Callers must treat 0 as "no opinion"
+    /// rather than "started at the epoch".
+    /// </summary>
+    public static long CreationTimeOf(int pid)
+    {
+        var h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)pid);
+        if (h == IntPtr.Zero) return 0;
+
+        try
+        {
+            return GetProcessTimes(h, out var creation, out _, out _, out _) ? creation : 0;
+        }
+        finally
+        {
+            CloseHandle(h);
+        }
+    }
+
     // Command line without WMI. ProcessCommandLineInformation (60) landed in
     // Windows 8.1 and works on same-user processes with only QUERY_LIMITED.
     // A Win32_Process query would cost 100-300ms a sweep; this costs microseconds.
@@ -284,6 +306,165 @@ internal static class Native
     public static extern int NtQueryInformationProcess(IntPtr hProcess, int infoClass,
                                                        IntPtr buffer, int bufferLength,
                                                        out int returnLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool ProcessIdToSessionId(uint dwProcessId, out uint pSessionId);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WTS_PROCESS_INFOW
+    {
+        public int SessionId;
+        public int ProcessId;
+        public IntPtr pProcessName;
+        public IntPtr pUserSid;
+    }
+
+    [DllImport("wtsapi32.dll", SetLastError = true, EntryPoint = "WTSEnumerateProcessesW")]
+    private static extern bool WTSEnumerateProcesses(IntPtr server, int reserved, int version,
+                                                     out IntPtr info, out int count);
+
+    [DllImport("wtsapi32.dll")]
+    private static extern void WTSFreeMemory(IntPtr memory);
+
+    private static Dictionary<int, int>? _wtsSessions;
+    private static DateTime _wtsTaken = DateTime.MinValue;
+    private static readonly object WtsGate = new();
+
+    /// <summary>
+    /// Which terminal session a process belongs to. Session 0 is the service
+    /// session: it has no interactive desktop, so a console there is a console
+    /// that cannot be seen, however loudly the process table says one appeared.
+    ///
+    /// Two routes, and the cheap one is not enough. ProcessIdToSessionId reads
+    /// as though it needs no rights - it takes a pid, not a handle - but it
+    /// fails with access denied for exactly the processes worth asking about:
+    /// anything running as SYSTEM in session 0. Believing it cost this panel
+    /// the answer to its own headline question, because a failure there is
+    /// indistinguishable from "unknown" and unknown got treated as ordinary.
+    ///
+    /// So a denial falls through to the terminal services enumeration, which
+    /// reports every process on the machine with its session and needs no
+    /// elevation. It costs one call for the whole table rather than one per
+    /// process, so the result is cached for a few seconds and shared.
+    /// </summary>
+    public static int SessionOf(int pid)
+    {
+        if (ProcessIdToSessionId((uint)pid, out var session)) return (int)session;
+
+        lock (WtsGate)
+        {
+            if (_wtsSessions is null || (DateTime.UtcNow - _wtsTaken).TotalSeconds > 5)
+            {
+                _wtsSessions = EnumerateSessions();
+                _wtsTaken = DateTime.UtcNow;
+            }
+
+            return _wtsSessions.TryGetValue(pid, out var found) ? found : -1;
+        }
+    }
+
+    private static Dictionary<int, int> EnumerateSessions()
+    {
+        var map = new Dictionary<int, int>(400);
+
+        if (!WTSEnumerateProcesses(IntPtr.Zero, 0, 1, out var info, out var count)) return map;
+
+        try
+        {
+            var size = Marshal.SizeOf<WTS_PROCESS_INFOW>();
+            for (var i = 0; i < count; i++)
+            {
+                var entry = Marshal.PtrToStructure<WTS_PROCESS_INFOW>(info + i * size);
+                map[entry.ProcessId] = entry.SessionId;
+            }
+        }
+        catch
+        {
+            // A partial map is still better than none: every pid it did read
+            // is correct.
+        }
+        finally
+        {
+            WTSFreeMemory(info);
+        }
+
+        return map;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern bool ReadProcessMemory(IntPtr hProcess, IntPtr baseAddress,
+                                                IntPtr buffer, nuint size, out nuint read);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct PROCESS_BASIC_INFORMATION
+    {
+        public IntPtr ExitStatus;
+        public IntPtr PebBaseAddress;
+        public IntPtr AffinityMask;
+        public IntPtr BasePriority;
+        public IntPtr UniqueProcessId;
+        public IntPtr InheritedFromUniqueProcessId;
+    }
+
+    // Offsets into the 64-bit PEB and RTL_USER_PROCESS_PARAMETERS. Stable
+    // since Vista and not going to move; the alternative is a WMI query per
+    // process, which costs more than everything else Argus does combined.
+    private const int PebProcessParameters = 0x20;
+    private const int ParamsCurrentDirectory = 0x38;
+
+    /// <summary>
+    /// The working directory of a live process, or empty when it cannot be
+    /// read: another user, another session, or already exited.
+    ///
+    /// A 32-bit target is not handled - its PEB does not have this shape - but
+    /// it is not detected either. The offsets below land somewhere meaningless,
+    /// the read fails its own bounds check, and the answer comes back empty.
+    /// That is the right outcome by accident rather than by design, and it is
+    /// written down so the next person does not read the guard below as
+    /// covering it. That guard is on Argus's own bitness, not the target's.
+    ///
+    /// This is what binds a bare claude.exe to the project it is working in.
+    /// Nothing else on the process reveals it: the command line is just the
+    /// exe path.
+    /// </summary>
+    public static string CurrentDirectory(int pid)
+    {
+        if (IntPtr.Size != 8) return "";
+
+        var h = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, false, (uint)pid);
+        if (h == IntPtr.Zero) return "";
+
+        var scratch = Marshal.AllocHGlobal(1024);
+        try
+        {
+            if (NtQueryInformationProcess(h, ProcessBasicInformation, scratch,
+                    Marshal.SizeOf<PROCESS_BASIC_INFORMATION>(), out _) != 0) return "";
+
+            var peb = Marshal.PtrToStructure<PROCESS_BASIC_INFORMATION>(scratch).PebBaseAddress;
+            if (peb == IntPtr.Zero) return "";
+
+            if (!ReadProcessMemory(h, peb + PebProcessParameters, scratch, 8, out _)) return "";
+            var parameters = Marshal.ReadIntPtr(scratch);
+            if (parameters == IntPtr.Zero) return "";
+
+            if (!ReadProcessMemory(h, parameters + ParamsCurrentDirectory, scratch, 16, out _)) return "";
+            var length = (ushort)Marshal.ReadInt16(scratch);
+            var buffer = Marshal.ReadIntPtr(scratch, 8);
+            if (length == 0 || length > 1000 || buffer == IntPtr.Zero) return "";
+
+            if (!ReadProcessMemory(h, buffer, scratch, length, out var read)) return "";
+            return Marshal.PtrToStringUni(scratch, (int)read / 2)?.TrimEnd('\\') ?? "";
+        }
+        catch
+        {
+            return "";
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(scratch);
+            CloseHandle(h);
+        }
+    }
 
     // ------------------------------------------------------------ tray icon
     // Shell_NotifyIcon directly, rather than the WinForms NotifyIcon wrapper.

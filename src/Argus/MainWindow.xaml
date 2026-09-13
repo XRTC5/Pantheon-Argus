@@ -90,11 +90,26 @@
                             Margin="14,6,0,6" Padding="10,8"
                             Background="#0B131B"
                             BorderBrush="{StaticResource AccentDim}" BorderThickness="1,0,0,0">
-                        <TextBlock Text="{Binding Explain}"
-                                   FontFamily="{StaticResource UiFont}"
-                                   FontSize="11" LineHeight="16"
-                                   Foreground="{StaticResource TextMid}"
-                                   TextWrapping="Wrap" />
+                        <StackPanel>
+                            <TextBlock Text="{Binding Explain}"
+                                       FontFamily="{StaticResource UiFont}"
+                                       FontSize="11" LineHeight="16"
+                                       Foreground="{StaticResource TextMid}"
+                                       TextWrapping="Wrap" />
+
+                            <!-- The way into the breakdown. It lives inside the
+                                 explanation rather than on the row itself: a
+                                 second button on every line would be clutter on
+                                 a panel whose whole argument is that it is a
+                                 glance, and by the time someone has opened the
+                                 explanation they are already asking the question
+                                 this answers. -->
+                            <Button Style="{StaticResource GlyphButton}"
+                                    Content="WHAT IS UNDER THIS"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,8,0,0"
+                                    Click="Breakdown_Click" />
+                        </StackPanel>
                     </Border>
                 </StackPanel>
             </Border>

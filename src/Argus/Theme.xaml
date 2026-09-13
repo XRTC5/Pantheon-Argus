@@ -16,6 +16,7 @@
     <v:StateToBrushConverter x:Key="StateBrush" />
     <v:EmptyToCollapsedConverter x:Key="EmptyHide" />
     <v:FractionToWidthConverter x:Key="FractionWidth" />
+    <v:DepthToMarginConverter x:Key="DepthIndent" />
 
     <!-- ============================================================ palette -->
 

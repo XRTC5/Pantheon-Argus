@@ -15,11 +15,51 @@ Named for the hundred-eyed giant who was set to watch and never slept.
 | **Services** | Is each service actually up, and is it *answering* or just holding a port open |
 | **Schedule** | When the next pull runs, and whether the last one really succeeded |
 | **Claude Code** | Which project has a live session writing right now |
-| **Caught windows** | Every console that appeared, with the parent that spawned it |
+| **Caught consoles** | Every console that started, who started it, and whether it was ever on screen |
 | **Processes** | Grouped by image, ranked by memory, foreground first |
 
 The header carries machine CPU and RAM, the process count, and Argus's own
 working set — a watchman that will not be watched is not one to trust.
+
+## What a caught console actually means
+
+Argus does not watch windows here. It watches the process table for a console
+host appearing - `conhost`, `cmd`, `powershell`, `wscript` - and treats that as
+a console. Useful, and not the same thing, because two of those events are not
+what they look like:
+
+- **A console in session 0 was never on screen.** Scheduled tasks configured to
+  run whether you are logged in or not run in the service session, which has no
+  interactive desktop at all. A window there is not hidden, it is impossible.
+  Those rows are grey and say so, rather than being flagged amber as something
+  that happened to you.
+- **One console event is several processes.** Running a single command through a
+  shell produces the shell, whatever it calls, and the `conhost` Windows
+  attaches to the console - three rows, three timestamps, one event. Only the
+  outermost is listed; the rest are under it in the breakdown.
+
+Anything the Task Scheduler starts reports a parent of `svchost.exe`, which
+names the mechanism and never the job, so Argus asks Task Scheduler which task
+owns the process and shows that name instead.
+
+## What is under a row
+
+Click a row to read what it is, then **WHAT IS UNDER THIS** to see what it is
+made of: the process tree beneath it, the consoles it opened, the port it
+holds, the scheduled task that owns it.
+
+It opens as its own small window - drag it by its header, resize it from the
+corner, close it with the button or Esc, and it reopens where you left it. A
+window rather than a panel takeover, because it is a thing you read *while*
+looking at the panel; and a real window rather than a popup, because a popup is
+owned by its opener and would inherit the panel's place at the bottom of the
+window stack. It stays live while it is open.
+
+The sections on the panel group by kind, which is right for a glance and wrong
+for a question - one piece of work appears in three of them at once and reads as
+three unrelated things. A task, the shell it runs, the console that shell drags
+in with it and the port it ends up holding are one thing, and this is the view
+that says so.
 
 ## Starting and stopping
 

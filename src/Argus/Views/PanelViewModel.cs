@@ -10,6 +10,9 @@ public sealed class SignalRow : INotifyPropertyChanged
 {
     public string Id { get; }
 
+    /// <summary>Which section this row belongs to. Fixed for the life of the row.</summary>
+    public SignalGroup Group { get; }
+
     private string _title = "";
     private string _detail = "";
     private string? _sub;
@@ -23,6 +26,7 @@ public sealed class SignalRow : INotifyPropertyChanged
     public SignalRow(Signal s)
     {
         Id = s.Id;
+        Group = s.Group;
         Apply(s);
     }
 
@@ -175,12 +179,91 @@ public sealed class Section : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 }
 
+/// <summary>One group inside the breakdown pane.</summary>
+public sealed class DetailGroup
+{
+    public required string Title { get; init; }
+    public required IReadOnlyList<Argus.Core.BreakdownItem> Items { get; init; }
+    public required string Empty { get; init; }
+    public bool HasItems => Items.Count > 0;
+    public bool IsEmpty => Items.Count == 0;
+}
+
+/// <summary>
+/// The breakdown pane: what is actually underneath one row.
+///
+/// Rebuilt only when its content changes rather than on every sweep. The pane
+/// is open while someone is reading it, and a list that reconstructs itself
+/// three times a second loses the scroll position mid-sentence.
+/// </summary>
+public sealed class DetailViewModel : INotifyPropertyChanged
+{
+    private string _title = "";
+    private string _summary = "";
+    private bool _isOpen;
+    private string _signature = "";
+
+    public string Title { get => _title; private set => Set(ref _title, value); }
+    public string Summary { get => _summary; private set => Set(ref _summary, value); }
+
+    public bool IsOpen
+    {
+        get => _isOpen;
+        set => Set(ref _isOpen, value);
+    }
+
+    /// <summary>The row this pane is describing, so a refresh can rebuild it.</summary>
+    public string RowId { get; private set; } = "";
+    public string RowTitle { get; private set; } = "";
+
+    public ObservableCollection<DetailGroup> Groups { get; } = [];
+
+    public void Open(string rowId, string rowTitle)
+    {
+        RowId = rowId;
+        RowTitle = rowTitle;
+        _signature = "";
+        IsOpen = true;
+    }
+
+    public void Show(Argus.Core.BreakdownReport report)
+    {
+        Title = report.Title;
+        Summary = report.Summary;
+
+        // Cheap change detection. Everything rendered is in here, so if the
+        // signature matches, redrawing would produce the identical pane.
+        var signature = string.Join("|", report.Groups.Select(g =>
+            g.Title + "#" + string.Join(",", g.Items.Select(i => i.Title + i.Detail + i.Sub))));
+
+        if (signature == _signature) return;
+        _signature = signature;
+
+        Groups.Clear();
+        foreach (var g in report.Groups)
+        {
+            Groups.Add(new DetailGroup { Title = g.Title, Items = g.Items, Empty = g.Empty });
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+}
+
 public sealed class PanelViewModel : INotifyPropertyChanged
 {
+    public DetailViewModel Detail { get; } = new();
+
     public Section Services { get; } = new("SERVICES", SignalGroup.Service);
     public Section Schedule { get; } = new("SCHEDULE", SignalGroup.Schedule);
     public Section Claude   { get; } = new("CLAUDE CODE", SignalGroup.Claude);
-    public Section Ghosts   { get; } = new("CAUGHT WINDOWS", SignalGroup.Ghost);
+    public Section Ghosts   { get; } = new("CAUGHT CONSOLES", SignalGroup.Ghost);
     public Section Processes { get; } = new("PROCESSES", SignalGroup.Process);
 
     private string _clock = "";

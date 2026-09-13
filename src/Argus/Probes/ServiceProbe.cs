@@ -61,16 +61,7 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
             // a guess that can catch an unrelated shell; the port owner is the
             // service by definition. The match is only a fallback for targets
             // with no port at all.
-            ProcInfo? proc = null;
-            if (portOpen)
-            {
-                var ownerPid = Native.PidListeningOn(target.Port);
-                if (ownerPid != 0) scanner.Current.TryGetValue(ownerPid, out proc);
-            }
-
-            proc ??= string.IsNullOrEmpty(target.ProcessMatch)
-                ? null
-                : scanner.FindByCommandLine(target.ProcessMatch);
+            var proc = ResolveProcess(target, scanner, portOpen);
 
             SignalState state;
             string detail;
@@ -149,6 +140,42 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Which live process is this target, if any.
+    ///
+    /// Public because the breakdown view has to reach the same answer as the
+    /// row it was opened from. Two independent guesses at "which process is
+    /// the service" is how a panel ends up disagreeing with itself.
+    /// </summary>
+    public static ProcInfo? ResolveProcess(WatchTarget target, ProcessScanner scanner, bool portOpen)
+    {
+        ProcInfo? proc = null;
+        if (portOpen)
+        {
+            // TryGet rather than Current: the breakdown calls this from a
+            // thread-pool thread, and that is exactly the caller the scanner's
+            // gate exists for.
+            var ownerPid = Native.PidListeningOn(target.Port);
+            if (ownerPid != 0) proc = scanner.TryGet(ownerPid);
+        }
+
+        return proc ?? (string.IsNullOrEmpty(target.ProcessMatch)
+            ? null
+            : scanner.FindByCommandLine(target.ProcessMatch));
+    }
+
+    /// <summary>True when something is listening on this target's port right now.</summary>
+    public static bool IsPortOpen(int port)
+    {
+        if (port == 0) return false;
+        try
+        {
+            return IPGlobalProperties.GetIPGlobalProperties()
+                .GetActiveTcpListeners().Any(e => e.Port == port);
+        }
+        catch { return false; }
     }
 
     private static async Task<bool> CheckHealthAsync(WatchTarget target, CancellationToken ct)
