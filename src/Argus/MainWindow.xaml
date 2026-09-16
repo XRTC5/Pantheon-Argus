@@ -249,6 +249,12 @@
                     <ContentPresenter Content="{Binding Claude}"    ContentTemplate="{StaticResource SectionTemplate}" />
                     <ContentPresenter Content="{Binding Ghosts}"    ContentTemplate="{StaticResource SectionTemplate}" />
                     <ContentPresenter Content="{Binding Processes}" ContentTemplate="{StaticResource SectionTemplate}" />
+
+                    <!-- Last on purpose. Everything above reports; this section
+                         acts, and putting it under the process list keeps it
+                         out of the way of a glance. Hidden entirely when no
+                         repairs are configured. -->
+                    <ContentPresenter Content="{Binding Fixes}"     ContentTemplate="{StaticResource SectionTemplate}" />
                 </StackPanel>
             </ScrollViewer>
 

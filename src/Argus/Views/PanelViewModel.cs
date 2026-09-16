@@ -61,6 +61,7 @@ public sealed class SignalRow : INotifyPropertyChanged
     {
         ControlAction.Start => "START",
         ControlAction.Stop  => "STOP",
+        ControlAction.Fix   => "FIX",
         _ => "",
     };
 
@@ -266,6 +267,13 @@ public sealed class PanelViewModel : INotifyPropertyChanged
     public Section Ghosts   { get; } = new("CAUGHT CONSOLES", SignalGroup.Ghost);
     public Section Processes { get; } = new("PROCESSES", SignalGroup.Process);
 
+    /// <summary>
+    /// Last, and deliberately so. A repair is the rarest thing on this panel
+    /// and the only one that changes the machine, so it sits below everything
+    /// that merely reports.
+    /// </summary>
+    public Section Fixes { get; } = new("FIXES", SignalGroup.Fix);
+
     private string _clock = "";
     private string _cpuText = "";
     private string _memText = "";
@@ -287,6 +295,7 @@ public sealed class PanelViewModel : INotifyPropertyChanged
         Claude.Sync(signals);
         Ghosts.Sync(signals);
         Processes.Sync(signals);
+        Fixes.Sync(signals);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

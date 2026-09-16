@@ -19,6 +19,14 @@ public enum ControlAction
     None,
     Start,
     Stop,
+
+    /// <summary>
+    /// Run a one-shot repair. Not the same idea as Start or Stop: those are
+    /// about a thing being up or down, this is a known remedy for a known
+    /// breakage. It runs elevated, because a breakage worth keeping a button
+    /// for is usually one an ordinary process cannot undo.
+    /// </summary>
+    Fix,
 }
 
 public enum SignalGroup
@@ -28,6 +36,13 @@ public enum SignalGroup
     Ghost,
     Claude,
     Process,
+
+    /// <summary>
+    /// Repairs, pinned to the bottom of the panel. Not a status section -
+    /// nothing in it is running or failing. These are the buttons for when
+    /// something in one of the sections above is.
+    /// </summary>
+    Fix,
 }
 
 /// <summary>

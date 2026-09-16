@@ -84,6 +84,7 @@ public partial class MainWindow : Window
         _host.Add(new ServiceProbe(_settings, _scanner));
         _host.Add(new ScheduleProbe(_settings));
         _host.Add(new ClaudeCodeProbe(_settings));
+        _host.Add(new FixProbe(_settings));
 
         _host.SignalsChanged += OnSignals;
         _host.Start();
@@ -350,7 +351,7 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Start or stop the service on this row.
+    /// Start or stop the service on this row, or run the repair on it.
     ///
     /// The pid handed to Stop is the one already displayed, not a fresh search,
     /// so what gets stopped is exactly what was on screen when the button was
@@ -363,6 +364,23 @@ public partial class MainWindow : Window
 
         if ((sender as FrameworkElement)?.DataContext is not SignalRow row) return;
         if (row.ControlTarget is null) return;
+
+        // A repair is looked up in its own list. It is not a watch target and
+        // has no pid, no port and no running state - only a command.
+        if (row.Control == ControlAction.Fix)
+        {
+            var fix = _settings.Fixes.FirstOrDefault(f => f.Name == row.ControlTarget);
+            if (fix is null) return;
+
+            var outcome = ServiceControl.RunFix(fix);
+
+            // Recorded as well as shown: this row has no state for the next
+            // sweep to replace the message with, so the probe puts it back.
+            FixLog.Record(fix.Name, outcome);
+            row.Note(outcome);
+            _host?.RefreshNow();
+            return;
+        }
 
         var target = _settings.Targets.FirstOrDefault(t => t.Name == row.ControlTarget);
         if (target is null) return;

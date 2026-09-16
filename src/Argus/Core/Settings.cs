@@ -75,6 +75,47 @@ public sealed class WatchTarget
     public bool Enabled { get; set; } = true;
 }
 
+/// <summary>
+/// A known remedy for a known breakage, offered as a button in the Fixes
+/// section.
+///
+/// This is the one thing on the panel that changes the machine rather than
+/// reporting on it, so it follows the same rule as Start: Argus only ever runs
+/// a command the user put in settings.json. Nothing is inferred or discovered,
+/// and an empty Fixes list means no section at all.
+///
+/// Elevated by default. A repair that a normal process could perform is rarely
+/// worth a button, and the ones that matter - drivers, services, anything under
+/// Program Files - all need admin.
+/// </summary>
+public sealed class FixAction
+{
+    public string Name { get; set; } = "";
+
+    /// <summary>Shown under the name. Keep it to a few words.</summary>
+    public string Note { get; set; } = "";
+
+    /// <summary>What this repairs and why, in a sentence or two, shown on hover.</summary>
+    public string What { get; set; } = "";
+
+    /// <summary>Executable to run. A .ps1 is run through PowerShell with no window.</summary>
+    public string Command { get; set; } = "";
+
+    /// <summary>Arguments for Command. Optional.</summary>
+    public string? Args { get; set; }
+
+    /// <summary>Working directory. Defaults to the folder Command lives in.</summary>
+    public string? WorkingDirectory { get; set; }
+
+    /// <summary>
+    /// Run as administrator, which means a UAC prompt on every press. On by
+    /// default; set false for a repair that genuinely does not need it.
+    /// </summary>
+    public bool Elevated { get; set; } = true;
+
+    public bool Enabled { get; set; } = true;
+}
+
 public sealed class ArgusSettings
 {
     // ------------------------------------------------------------ placement
@@ -160,6 +201,14 @@ public sealed class ArgusSettings
     // ------------------------------------------------------------ targets
 
     public List<WatchTarget> Targets { get; set; } = [];
+
+    /// <summary>
+    /// Repairs offered at the bottom of the panel. Empty by default, and an
+    /// empty list means the section does not appear - unlike Targets there are
+    /// no examples here, because an example repair is a button that does
+    /// something unhelpful to a real machine.
+    /// </summary>
+    public List<FixAction> Fixes { get; set; } = [];
 
     // ------------------------------------------------------------ storage
 
