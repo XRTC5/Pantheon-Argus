@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Argus.Core;
@@ -51,6 +52,11 @@ public partial class MainWindow : Window
         _settings = settings;
         InitializeComponent();
         DataContext = _vm;
+
+        // Zero means no cap, which is Infinity to a ScrollViewer.
+        _vm.Services.MaxHeight = _settings.ServicesMaxHeight > 0
+            ? _settings.ServicesMaxHeight
+            : double.PositiveInfinity;
 
         Width = _settings.Width;
         SourceInitialized += OnSourceInitialized;
@@ -134,6 +140,47 @@ public partial class MainWindow : Window
     /// question: one piece of work appears in three sections and reads as
     /// three unrelated things. This is the view that puts it back together.
     /// </summary>
+    /// <summary>
+    /// Keep a section's scroll where the reader left it.
+    ///
+    /// Rows are reconciled in place every few seconds, and any one of them
+    /// asking to be brought into view drags the section with it. That is how
+    /// the list ends up scrolled to the bottom on its own, with the targets
+    /// you configured pushed out of sight above the ones Argus found.
+    /// </summary>
+    private void OnSectionBringIntoView(object sender, RequestBringIntoViewEventArgs e) =>
+        e.Handled = true;
+
+    /// <summary>
+    /// Once a capped section has no more to give, the wheel carries on into
+    /// the panel behind it.
+    ///
+    /// Without this a section with its own scroll is a trap: the pointer
+    /// happens to be over it, the wheel turns, and the whole panel stops
+    /// moving for no reason the reader can see.
+    /// </summary>
+    private void OnSectionWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer view) return;
+
+        var up = e.Delta > 0;
+        var atTop = view.VerticalOffset <= 0.5;
+        var atEnd = view.VerticalOffset >= view.ScrollableHeight - 0.5;
+
+        // Still room in the direction asked for: the section keeps the wheel.
+        // An uncapped section has nowhere to go and is at both ends at once,
+        // so it always passes it on.
+        if (up ? !atTop : !atEnd) return;
+
+        e.Handled = true;
+        (view.Parent as UIElement)?.RaiseEvent(new MouseWheelEventArgs(
+            e.MouseDevice, e.Timestamp, e.Delta)
+        {
+            RoutedEvent = MouseWheelEvent,
+            Source = view,
+        });
+    }
+
     private void Breakdown_Click(object sender, RoutedEventArgs e)
     {
         // Handled, so opening the breakdown does not also collapse the

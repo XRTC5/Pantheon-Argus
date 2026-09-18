@@ -198,7 +198,14 @@
          330px panel. This is a 4px rule that only exists while it is useful. -->
 
     <Style x:Key="ThinScrollBar" TargetType="ScrollBar">
-        <Setter Property="Width" Value="4" />
+        <!-- Width here does nothing, and neither does MaxWidth: a ScrollViewer
+             gives its scrollbar a width as a local value inside its own
+             template, and a local value beats any style setter. Both were set
+             for a long time and the bar stayed 17px.
+
+             What is ours is the thumb, so that is what gets narrowed. The
+             ScrollBar keeps its width as an invisible hit area, which is no
+             bad thing to grab at, and paints a 4px rule down the right of it. -->
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Template">
             <Setter.Value>
@@ -208,7 +215,9 @@
                             <Thumb>
                                 <Thumb.Template>
                                     <ControlTemplate TargetType="Thumb">
-                                        <Border Background="#25384A" CornerRadius="2" />
+                                        <Border Background="#25384A" CornerRadius="2"
+                                                Width="4" HorizontalAlignment="Right"
+                                                Margin="0,0,2,0" />
                                     </ControlTemplate>
                                 </Thumb.Template>
                             </Thumb>

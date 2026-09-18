@@ -133,9 +133,22 @@
                     <Rectangle Height="1" Fill="{StaticResource RuleSoft}" VerticalAlignment="Bottom"
                                Margin="12,0,12,4" />
                 </Grid>
-                <ItemsControl ItemsSource="{Binding Rows}"
-                              ItemTemplate="{StaticResource SignalRowTemplate}"
-                              VirtualizingPanel.IsVirtualizing="False" />
+                <!-- MaxHeight is Infinity for most sections, which makes this
+                     ScrollViewer a no-op: it sizes to its content and the
+                     panel's own scroll does the work. Only a section that
+                     said otherwise scrolls on its own. -->
+                <ScrollViewer MaxHeight="{Binding MaxHeight}"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              PreviewMouseWheel="OnSectionWheel"
+                              RequestBringIntoView="OnSectionBringIntoView">
+                    <ScrollViewer.Resources>
+                        <Style TargetType="ScrollBar" BasedOn="{StaticResource ThinScrollBar}" />
+                    </ScrollViewer.Resources>
+                    <ItemsControl ItemsSource="{Binding Rows}"
+                                  ItemTemplate="{StaticResource SignalRowTemplate}"
+                                  VirtualizingPanel.IsVirtualizing="False" />
+                </ScrollViewer>
             </StackPanel>
         </DataTemplate>
 

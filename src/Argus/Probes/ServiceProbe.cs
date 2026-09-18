@@ -24,6 +24,10 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
         DefaultRequestHeaders = { { "User-Agent", "Argus" } },
     };
 
+    // Kept per probe, not per poll: it remembers which ports turned out not to
+    // be web servers so it does not wait on them again every few seconds.
+    private readonly LocalWebScan _discovery = new();
+
     public async Task<IReadOnlyList<Signal>> PollAsync(CancellationToken ct)
     {
         var results = new List<Signal>(settings.Targets.Count);
@@ -139,7 +143,84 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
             });
         }
 
+        if (settings.DiscoverLocalServices)
+        {
+            await AddDiscoveredAsync(results, order, ct).ConfigureAwait(false);
+        }
+
         return results;
+    }
+
+    /// <summary>
+    /// Local web servers nobody configured, listed under the ones who were.
+    ///
+    /// These carry no buttons on purpose. Argus only ever runs a command that
+    /// was written down in settings.json, and a port it noticed by itself does
+    /// not come with one.
+    /// </summary>
+    private async Task AddDiscoveredAsync(List<Signal> results, int order, CancellationToken ct)
+    {
+        var configured = settings.Targets.Where(t => t.Port != 0).Select(t => t.Port).ToHashSet();
+
+        IReadOnlyList<LocalWeb> found;
+        try
+        {
+            found = await _discovery.ScanAsync(configured, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"local web scan failed: {ex.Message}");
+            return;
+        }
+
+        foreach (var web in found)
+        {
+            // Only things that said what they are. A row reading
+            // "localhost:45654" is a port number wearing a name badge: it
+            // takes up a line and answers nothing, and several of them turn
+            // the section into noise.
+            if (string.IsNullOrWhiteSpace(web.Title)) continue;
+
+            var proc = web.Pid != 0 ? scanner.TryGet(web.Pid) : null;
+            var process = proc is not null ? Trim(proc.Name) : "unknown process";
+
+            var explain = new System.Text.StringBuilder();
+            explain.AppendLine(
+                "A local web server Argus found listening, rather than one you configured. "
+                + "It answered a request on / just now, which is what separates a service "
+                + "from the dozens of system ports that are always bound.");
+            explain.AppendLine();
+            explain.AppendLine($"Port    {web.Port} - open and answering");
+            explain.AppendLine($"Address http://127.0.0.1:{web.Port}/");
+            explain.AppendLine(proc is not null
+                ? $"Process {process}, pid {proc.Pid}"
+                : "Process owner could not be read");
+            explain.AppendLine();
+            explain.AppendLine(
+                "No Start or Stop here: Argus does not guess how to run something it was "
+                + "not told about. Add it to Targets in settings.json to get the buttons, "
+                + "a note and a health path.");
+
+            results.Add(new Signal
+            {
+                Id = $"svc:discovered:{web.Port}",
+                Group = SignalGroup.Service,
+                // The page's own title beats anything Argus could invent, and
+                // is usually the name of the project behind it.
+                Title = web.Title!,
+                Detail = $":{web.Port}",
+                Sub = $"found : {process}" + (proc is not null ? $" pid {proc.Pid}" : ""),
+                State = SignalState.Live,
+                Pid = web.Pid,
+                Explain = explain.ToString().TrimEnd(),
+                // After every configured target, whatever their count.
+                Order = 1000 + web.Port,
+            });
+        }
     }
 
     /// <summary>

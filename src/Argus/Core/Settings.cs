@@ -203,6 +203,27 @@ public sealed class ArgusSettings
     public List<WatchTarget> Targets { get; set; } = [];
 
     /// <summary>
+    /// Also list local ports that answer HTTP but have no target configured.
+    ///
+    /// The configured list is the one you curate: it has notes, health paths
+    /// and Start buttons. This is everything else you happen to be running,
+    /// so a dev server you started an hour ago and forgot is on the panel
+    /// without having to be written down first. Discovered rows report only -
+    /// Argus will not offer to start or stop something nobody described.
+    /// </summary>
+    public bool DiscoverLocalServices { get; set; } = true;
+
+    /// <summary>
+    /// How tall the Services section may grow before it scrolls inside itself,
+    /// in device-independent pixels. Roughly 60 to a row.
+    ///
+    /// It is the one section whose length is not something you chose, so it is
+    /// the one that has to be stopped from pushing the rest off the bottom.
+    /// Zero removes the cap.
+    /// </summary>
+    public double ServicesMaxHeight { get; set; } = 300;
+
+    /// <summary>
     /// Repairs offered at the bottom of the panel. Empty by default, and an
     /// empty list means the section does not appear - unlike Targets there are
     /// no examples here, because an example repair is a button that does

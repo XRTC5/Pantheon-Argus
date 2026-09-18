@@ -121,13 +121,33 @@ public sealed class Section : INotifyPropertyChanged
     private readonly SignalGroup _group;
     private bool _visible;
 
-    public Section(string title, SignalGroup group)
+    public Section(string title, SignalGroup group, double maxHeight = double.PositiveInfinity)
     {
         Title = title;
         _group = group;
+        _maxHeight = maxHeight;
     }
 
     public string Title { get; }
+
+    /// <summary>
+    /// How tall this section may grow before it scrolls inside itself.
+    /// Infinity, the default, means it takes whatever room it needs and the
+    /// whole panel scrolls as one - which is right for a section with a
+    /// bounded number of rows.
+    /// </summary>
+    public double MaxHeight
+    {
+        get => _maxHeight;
+        set
+        {
+            if (Math.Abs(_maxHeight - value) < 0.5) return;
+            _maxHeight = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MaxHeight)));
+        }
+    }
+
+    private double _maxHeight = double.PositiveInfinity;
     public ObservableCollection<SignalRow> Rows { get; } = [];
 
     public bool IsVisible
@@ -261,6 +281,9 @@ public sealed class PanelViewModel : INotifyPropertyChanged
 {
     public DetailViewModel Detail { get; } = new();
 
+    // Capped: with discovery on, this is the one section whose length is
+    // not something the user chose, so it scrolls rather than pushing the
+    // rest of the panel down. The cap itself is in settings.json.
     public Section Services { get; } = new("SERVICES", SignalGroup.Service);
     public Section Schedule { get; } = new("SCHEDULE", SignalGroup.Schedule);
     public Section Claude   { get; } = new("CLAUDE CODE", SignalGroup.Claude);
