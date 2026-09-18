@@ -108,6 +108,18 @@ winget install --id Microsoft.DotNet.SDK.9
 `build.ps1` publishes to `dist/` and can register start-on-login. Argus also
 registers itself on first run (Settings → *Start with Windows*).
 
+Start-on-login is a **logon-triggered scheduled task**, not the Run key. The
+Run key is throttled by Explorer: ~10s after the shell is ready, then each
+entry several seconds apart, in registry enumeration order. Measured on one
+boot here, that put Argus on screen 123s after power-on — 89s of it queued
+behind OneDrive, Medal and LGHUB, while the app's own start-up is one second.
+The task runs with an **InteractiveToken** principal (S4U would give it a
+non-interactive window station and the panel would never paint) and an
+explicit Normal priority, because a task definition otherwise defaults to
+below-normal CPU and I/O. Being a WinExe, it allocates no console, so this
+costs no flash. If task registration is refused, Argus falls back to the Run
+key and says so in the log.
+
 Settings, and a capped log, live in `%APPDATA%\Argus\`.
 
 ## What it actually costs
