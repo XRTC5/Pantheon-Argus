@@ -51,6 +51,18 @@ public sealed partial class LocalWebScan
     // which is what happens when a dev server takes over a port a moment later.
     private static readonly TimeSpan RecheckSilent = TimeSpan.FromMinutes(2);
 
+    // The slowest this whole scan will run, whatever the caller's interval.
+    //
+    // Configured targets are polled every fifteen seconds because that is a
+    // health signal worth having fresh. This is a different question - "what
+    // else is up" - and local servers do not come and go on that timescale.
+    // A discovered row can therefore be up to this stale, which is the trade
+    // being made deliberately: it is a convenience, not a health check.
+    private static readonly TimeSpan MinimumGap = TimeSpan.FromSeconds(45);
+
+    private DateTimeOffset _lastScan = DateTimeOffset.MinValue;
+    private IReadOnlyList<LocalWeb> _last = [];
+
     // Concurrent because the probes run together: every port is asked at the
     // same time, and each writes its own result back here when it answers. A
     // plain Dictionary corrupts itself doing that, which is what happened.
@@ -75,6 +87,9 @@ public sealed partial class LocalWebScan
     public async Task<IReadOnlyList<LocalWeb>> ScanAsync(
         IReadOnlySet<int> skip, CancellationToken ct)
     {
+        if (DateTimeOffset.Now - _lastScan < MinimumGap) return _last;
+        _lastScan = DateTimeOffset.Now;
+
         var candidates = Listening()
             .Where(p => p >= LowestPort && p <= HighestPort && !skip.Contains(p))
             .ToList();
@@ -112,7 +127,8 @@ public sealed partial class LocalWebScan
         // Anything skipped this round because it was known-silent stays out;
         // anything known-good that failed this round is already gone from the
         // list, which is the point.
-        return found.OrderBy(w => w.Port).ToList();
+        _last = found.OrderBy(w => w.Port).ToList();
+        return _last;
     }
 
     private async Task<LocalWeb?> ProbeAsync(int port, int pid, CancellationToken ct)
