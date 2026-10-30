@@ -33,7 +33,7 @@ public sealed class ScheduleProbe(ArgusSettings settings) : IProbe
         {
             using var service = new TaskService();
 
-            foreach (var target in settings.Targets)
+            foreach (var target in settings.AllTargets)
             {
                 if (!target.Enabled || string.IsNullOrEmpty(target.ScheduledTask)) continue;
                 ct.ThrowIfCancellationRequested();

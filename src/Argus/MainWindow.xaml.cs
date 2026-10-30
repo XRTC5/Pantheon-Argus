@@ -429,7 +429,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        var target = _settings.Targets.FirstOrDefault(t => t.Name == row.ControlTarget);
+        var target = _settings.AllTargets.FirstOrDefault(t => t.Name == row.ControlTarget);
         if (target is null) return;
 
         var result = row.Control == ControlAction.Start

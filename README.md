@@ -79,6 +79,21 @@ shell that merely mentions the path. Whoever holds the socket is the service, by
 definition; nothing else is. After killing, Argus waits for the port to actually
 release and says so if it does not, rather than claiming success.
 
+**A target can ask before it kills.** Give it a `StopCommand` (and `StopArgs`)
+and Stop runs that first, for an app that should save on its way out. Argus
+falls back to the kill only if the process is still running five seconds
+later.
+
+### With Clio
+
+[Clio](https://github.com/XRTC5/clio) is a sticky-notes companion app and a
+separate download; each works without the other. When both are installed,
+Clio leaves its path in `%APPDATA%\Clio\app.json`, and Argus picks that up and
+shows a **Clio** row with Start and Stop. Its Stop is `Clio.exe --quit`, so
+Clio saves before it exits. Nothing is written to `settings.json`, so the row
+follows Clio if it moves and disappears if Clio is removed. A Clio target you
+write yourself takes precedence.
+
 ## How it sits
 
 Three modes, switched in Settings or from the tray:

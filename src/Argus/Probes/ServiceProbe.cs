@@ -30,7 +30,7 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
 
     public async Task<IReadOnlyList<Signal>> PollAsync(CancellationToken ct)
     {
-        var results = new List<Signal>(settings.Targets.Count);
+        var results = new List<Signal>(settings.Targets.Count + 1);
 
         // All listening ports in one call, rather than one connect attempt per
         // target. Also correct in a way a connect test is not: it sees the
@@ -50,7 +50,7 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
         }
 
         var order = 0;
-        foreach (var target in settings.Targets)
+        foreach (var target in settings.AllTargets)
         {
             if (!target.Enabled) continue;
             ct.ThrowIfCancellationRequested();

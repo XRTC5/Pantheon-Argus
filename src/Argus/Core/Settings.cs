@@ -213,6 +213,14 @@ public sealed class ArgusSettings
     public List<WatchTarget> Targets { get; set; } = [];
 
     /// <summary>
+    /// What the panel watches: the configured targets plus any sibling app that
+    /// has announced itself (see Companions). Read this, not Targets, anywhere
+    /// a row is built or a row's target is looked up; Targets is only what is saved.
+    /// </summary>
+    [JsonIgnore]
+    public IReadOnlyList<WatchTarget> AllTargets => [.. Targets, .. Companions.Discover(Targets)];
+
+    /// <summary>
     /// Also list local ports that answer HTTP but have no target configured.
     ///
     /// The configured list is the one you curate: it has notes, health paths

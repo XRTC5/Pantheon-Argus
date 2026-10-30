@@ -65,7 +65,7 @@ public static class Breakdown
     private static BreakdownReport ForService(string name, ArgusSettings settings,
                                               ProcessScanner scanner)
     {
-        var target = settings.Targets.FirstOrDefault(t =>
+        var target = settings.AllTargets.FirstOrDefault(t =>
             t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
         if (target is null)
@@ -118,7 +118,7 @@ public static class Breakdown
     private static BreakdownReport ForSchedule(string name, ArgusSettings settings,
                                                ProcessScanner scanner)
     {
-        var target = settings.Targets.FirstOrDefault(t =>
+        var target = settings.AllTargets.FirstOrDefault(t =>
             t.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
         var taskName = target?.ScheduledTask ?? name;
