@@ -543,10 +543,21 @@ public sealed class ProcessScanner
 
     private ProcInfo? FindByCommandLineLocked(string needle)
     {
+        // Image names first, in a pass of their own. Checked inline, a shell
+        // whose command line merely mentions "Clio.exe" could be reached
+        // before Clio itself, and Stop would then kill the shell.
         foreach (var p in _current.Values)
-        {
             if (p.Name.Contains(needle, StringComparison.OrdinalIgnoreCase)) return p;
 
+        // A bare exe name ("Clio.exe") names an image, full stop. Falling
+        // through to command lines would let a shell that typed the name stand
+        // in for the program when it is not running. A path ending in .exe
+        // (sldprt-export's venv pythonw) is a command-line match and still is.
+        if (needle.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && !needle.Contains('\\'))
+            return null;
+
+        foreach (var p in _current.Values)
+        {
             // Only interpreters and servers are worth the command-line lookup;
             // scanning all 300 would defeat the cheap sweep.
             if (!IsInterpreter(p.Name)) continue;

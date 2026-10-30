@@ -80,6 +80,14 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
                     ? (proc is not null ? $"{Trim(proc.Name)} pid {proc.Pid}" : target.Note)
                     : "port open, not answering";
             }
+            else if (proc is not null && target.Port == 0)
+            {
+                // A program with no port (Clio) has nothing to bind: running
+                // is the whole of healthy, not a half-started server.
+                state = SignalState.Live;
+                detail = "running";
+                sub = $"{Trim(proc.Name)} pid {proc.Pid}";
+            }
             else if (proc is not null)
             {
                 // Process alive but nothing bound: almost always mid-start, or

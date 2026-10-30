@@ -69,6 +69,16 @@ public sealed class WatchTarget
     /// <summary>Arguments for StartCommand. Optional.</summary>
     public string? StartArgs { get; set; }
 
+    /// <summary>
+    /// A polite way to stop this, tried before any kill: an app that saves on
+    /// exit (Clio: "Clio.exe --quit") should be asked, not shot. If the process
+    /// is still alive five seconds later, Stop falls back to the kill.
+    /// </summary>
+    public string? StopCommand { get; set; }
+
+    /// <summary>Arguments for StopCommand. Optional.</summary>
+    public string? StopArgs { get; set; }
+
     /// <summary>Working directory. Defaults to the folder StartCommand lives in.</summary>
     public string? WorkingDirectory { get; set; }
 

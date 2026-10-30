@@ -216,6 +216,12 @@ internal static class ServiceControl
         {
             using var p = Process.GetProcessById(pid);
 
+            if (!string.IsNullOrWhiteSpace(target.StopCommand) && AskToStop(target, p))
+            {
+                Log.Info($"stopped {target.Name} via its stop command: pid {pid}");
+                return "stopped";
+            }
+
             // The launchers are cmd wrappers around a python or node server, so
             // killing only the matched process would orphan the actual service
             // and leave the port held.
@@ -251,5 +257,32 @@ internal static class ServiceControl
             Log.Error($"stop {target.Name} failed", ex);
             return ex.Message;
         }
+    }
+
+    /// <summary>
+    /// Runs the configured StopCommand and waits for the process to leave.
+    /// False means it is still there, and the caller falls back to the kill.
+    /// </summary>
+    private static bool AskToStop(WatchTarget target, Process p)
+    {
+        try
+        {
+            var command = Environment.ExpandEnvironmentVariables(target.StopCommand!);
+            using var asker = Process.Start(new ProcessStartInfo
+            {
+                FileName = command,
+                Arguments = target.StopArgs ?? "",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+
+            if (p.WaitForExit(5000)) return true;
+            Log.Warn($"{target.Name}: stop command ran but pid {p.Id} is still up; killing");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"{target.Name}: stop command failed ({ex.Message}); killing");
+        }
+        return false;
     }
 }
