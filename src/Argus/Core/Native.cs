@@ -62,6 +62,17 @@ internal static class Native
     public const int WM_DISPLAYCHANGE     = 0x007E;
     public const int WM_DPICHANGED        = 0x02E0;
     public const int WM_SETTINGCHANGE     = 0x001A;
+    public const int WM_NCHITTEST         = 0x0084;
+
+    // WM_NCHITTEST answers for the resize band.
+    public const int HTLEFT        = 10;
+    public const int HTRIGHT       = 11;
+    public const int HTTOP         = 12;
+    public const int HTTOPLEFT     = 13;
+    public const int HTTOPRIGHT    = 14;
+    public const int HTBOTTOM      = 15;
+    public const int HTBOTTOMLEFT  = 16;
+    public const int HTBOTTOMRIGHT = 17;
 
     [StructLayout(LayoutKind.Sequential)]
     public struct WINDOWPOS

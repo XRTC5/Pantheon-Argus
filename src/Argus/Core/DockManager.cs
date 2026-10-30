@@ -426,6 +426,18 @@ public sealed class DockManager
                 break;
             }
 
+            case Native.WM_NCHITTEST when _settings.DockMode != DockMode.Reserve:
+            {
+                // A borderless window has no resize frame, and AllowsTransparency
+                // removes the one WPF would otherwise fake for ResizeMode, so
+                // "drag an edge to resize" was untrue: there was no edge. Width
+                // still moved through the slider, which hid it; height could not
+                // move at all. This hands Windows a resize band around the rim.
+                var hit = ResizeHit(lParam);
+                if (hit != 0) { handled = true; return hit; }
+                break;
+            }
+
             case Native.WM_EXITSIZEMOVE:
                 // The one honest moment to record placement: the user has let
                 // go. Recording during the drag would write hundreds of times a
@@ -464,6 +476,42 @@ public sealed class DockManager
         }
 
         return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// The hit-test code for a point on the rim, or zero for the interior.
+    /// lParam carries the cursor in physical screen pixels, the same space as
+    /// GetWindowRect, so the band is scaled by DPI to stay a grabbable 6dip.
+    /// </summary>
+    private IntPtr ResizeHit(IntPtr lParam)
+    {
+        if (!Native.GetWindowRect(_hwnd, out var r)) return IntPtr.Zero;
+
+        // Sign-extend each half: on a monitor left of the primary, x is negative.
+        var x = (short)((long)lParam & 0xFFFF);
+        var y = (short)(((long)lParam >> 16) & 0xFFFF);
+
+        var screen = Monitors.Containing(r.Left + r.Width / 2, r.Top + r.Height / 2);
+        var band = (int)Math.Ceiling(6 * screen.Scale);
+
+        var left = x < r.Left + band;
+        var right = x >= r.Right - band;
+        var top = y < r.Top + band;
+        var bottom = y >= r.Bottom - band;
+
+        var code = (top, bottom, left, right) switch
+        {
+            (true, _, true, _) => Native.HTTOPLEFT,
+            (true, _, _, true) => Native.HTTOPRIGHT,
+            (_, true, true, _) => Native.HTBOTTOMLEFT,
+            (_, true, _, true) => Native.HTBOTTOMRIGHT,
+            (true, _, _, _) => Native.HTTOP,
+            (_, true, _, _) => Native.HTBOTTOM,
+            (_, _, true, _) => Native.HTLEFT,
+            (_, _, _, true) => Native.HTRIGHT,
+            _ => 0,
+        };
+        return code;
     }
 
     public void Detach()
