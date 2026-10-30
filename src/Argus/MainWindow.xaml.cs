@@ -288,6 +288,8 @@ public partial class MainWindow : Window
         // Argus reports its own footprint. A watchman that will not be watched
         // is not one you should trust to stay small.
         _vm.FootText = $"{_scanner.Count} processes   argus {_stats.SelfMb:0}M";
+        _vm.Services.Rows.FirstOrDefault(r => r.Id == "svc:argus")
+            ?.SetMemory(ProcessProbe.FormatMb(_stats.SelfMb));
 
         Housekeep();
     }

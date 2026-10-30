@@ -15,6 +15,7 @@ public sealed class SignalRow : INotifyPropertyChanged
 
     private string _title = "";
     private string _detail = "";
+    private string _memory = "";
     private string? _sub;
     private SignalState _state;
     private int _pid;
@@ -32,6 +33,7 @@ public sealed class SignalRow : INotifyPropertyChanged
 
     public string Title { get => _title; private set => Set(ref _title, value); }
     public string Detail { get => _detail; private set => Set(ref _detail, value); }
+    public string Memory { get => _memory; private set => Set(ref _memory, value); }
     public string? Sub { get => _sub; private set => Set(ref _sub, value); }
     public SignalState State { get => _state; private set => Set(ref _state, value); }
     public int Pid { get => _pid; private set => Set(ref _pid, value); }
@@ -78,10 +80,18 @@ public sealed class SignalRow : INotifyPropertyChanged
     /// </summary>
     public void Note(string message) => Sub = message;
 
+    /// <summary>
+    /// Updates just the RAM figure between probe sweeps. The Argus row uses it
+    /// on the header's 2-second tick, so the row and "argus NNM" in the header
+    /// are always the same sample rather than two readings 15 seconds apart.
+    /// </summary>
+    public void SetMemory(string memory) => Memory = memory;
+
     public void Apply(Signal s)
     {
         Title = s.Title;
         Detail = s.Detail;
+        if (s.Memory is not null) Memory = s.Memory;
         Sub = s.Sub;
         State = s.State;
         Pid = s.Pid;

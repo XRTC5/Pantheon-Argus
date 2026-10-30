@@ -59,6 +59,15 @@ public sealed record Signal
     /// <summary>Right-hand column. Short: a port, a PID, a countdown.</summary>
     public string Detail { get; init; } = "";
 
+    /// <summary>
+    /// RAM, shown as its own figure beside Detail ("85M"). Empty for rows where
+    /// memory means nothing - a scheduled task between runs, a stopped service.
+    /// Null means "leave the row's figure alone": the Argus row is kept current
+    /// by the header's 2-second tick, and the panel re-applies the last service
+    /// sweep every time any probe reports, which would put a stale number back.
+    /// </summary>
+    public string? Memory { get; init; } = "";
+
     /// <summary>Second line, dimmed. Optional.</summary>
     public string? Sub { get; init; }
 

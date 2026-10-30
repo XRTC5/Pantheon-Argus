@@ -80,6 +80,12 @@
                                     Click="Control_Click"
                                     Margin="0,0,6,0"
                                     Visibility="{Binding HasControl, Converter={StaticResource EmptyHide}}" />
+                            <!-- RAM for the row, dimmer than Detail so the port
+                                 or status still reads first. -->
+                            <TextBlock Style="{StaticResource RowDetail}"
+                                       Text="{Binding Memory}" Margin="0,1,10,0"
+                                       Foreground="{StaticResource TextLow}"
+                                       Visibility="{Binding Memory, Converter={StaticResource EmptyHide}}" />
                             <TextBlock Style="{StaticResource RowDetail}"
                                        Text="{Binding Detail}" Margin="0,1,0,0" />
                         </StackPanel>

@@ -50,6 +50,23 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
         }
 
         var order = 0;
+
+        // Argus first, on a line of its own: what the watchman itself costs,
+        // the same working-set figure the header and Processes section use.
+        // No buttons and no port - it is not something to start or stop from here.
+        results.Add(new Signal
+        {
+            Id = "svc:argus",
+            Group = SignalGroup.Service,
+            Title = "Argus",
+            Sub = "this panel",
+            State = SignalState.Live,
+            Memory = null,   // set by the header tick; see Signal.Memory
+            Explain = "Argus itself. The figure is its working set: the RAM it is holding right now, "
+                    + "the same measure as the Processes section. Shut it down from the tray menu.",
+            Order = order++,
+        });
+
         foreach (var target in settings.AllTargets)
         {
             if (!target.Enabled) continue;
@@ -144,6 +161,7 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
                 Group = SignalGroup.Service,
                 Title = target.Name,
                 Detail = detail,
+                Memory = proc is null ? "" : TreeMemory(proc.Pid),
                 Sub = sub,
                 State = state,
                 Pid = proc?.Pid ?? 0,
@@ -221,6 +239,7 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
                 // is usually the name of the project behind it.
                 Title = web.Title!,
                 Detail = $":{web.Port}",
+                Memory = proc is null ? "" : TreeMemory(proc.Pid),
                 Sub = $"found : {process}" + (proc is not null ? $" pid {proc.Pid}" : ""),
                 State = SignalState.Live,
                 Pid = web.Pid,
@@ -300,6 +319,19 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
             catch { return false; }
         }
         catch { return false; }
+    }
+
+    /// <summary>
+    /// RAM for a service: the process and everything under it. A launcher
+    /// script, the interpreter it starts and that interpreter's workers are one
+    /// service to the person reading the row, so they are one number.
+    /// </summary>
+    private string TreeMemory(int pid)
+    {
+        var tree = scanner.TreeOf(pid);
+        if (tree.Count == 0) return "";
+        scanner.FillMemory(tree);
+        return ProcessProbe.FormatMb(tree.Sum(p => p.MemoryMb));
     }
 
     private static string Trim(string exe) =>

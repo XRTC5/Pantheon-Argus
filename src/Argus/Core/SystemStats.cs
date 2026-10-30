@@ -23,6 +23,7 @@ public sealed class SystemStats
     /// <summary>Working set of Argus itself, in MB. Shown because it should be held to account.</summary>
     public double SelfMb { get; private set; }
 
+
     public void Update()
     {
         UpdateCpu();

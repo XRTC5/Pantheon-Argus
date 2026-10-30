@@ -218,7 +218,9 @@ public sealed class ArgusSettings
     /// a row is built or a row's target is looked up; Targets is only what is saved.
     /// </summary>
     [JsonIgnore]
-    public IReadOnlyList<WatchTarget> AllTargets => [.. Targets, .. Companions.Discover(Targets)];
+    // Companions first: a sibling app (Clio) sits directly under the Argus row
+    // rather than after a list that scrolls, where it was out of sight.
+    public IReadOnlyList<WatchTarget> AllTargets => [.. Companions.Discover(Targets), .. Targets];
 
     /// <summary>
     /// Also list local ports that answer HTTP but have no target configured.

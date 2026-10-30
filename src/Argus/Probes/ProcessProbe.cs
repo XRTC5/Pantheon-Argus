@@ -257,7 +257,7 @@ public sealed class ProcessProbe(ArgusSettings settings, ProcessScanner scanner)
     private static string Strip(string exe) =>
         exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? exe[..^4] : exe;
 
-    private static string FormatMb(double mb) =>
+    internal static string FormatMb(double mb) =>
         mb >= 1024 ? $"{mb / 1024:0.0}G" : $"{mb:0}M";
 
     internal static string Ago(DateTimeOffset when)
