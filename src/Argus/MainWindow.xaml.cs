@@ -107,7 +107,9 @@ public partial class MainWindow : Window
         UpdateHeader();
 
         LoadSettingsPane();
-        Startup.Sync(_settings);
+        // The logon task belongs to the real install; an ARGUS_DATA copy
+        // would re-point it at itself.
+        if (!ArgusSettings.Isolated) Startup.Sync(_settings);
         Log.Info("argus up");
     }
 

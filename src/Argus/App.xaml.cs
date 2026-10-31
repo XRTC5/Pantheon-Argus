@@ -21,7 +21,13 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        _single = new Mutex(initiallyOwned: true, "Local\\ArgusSingleInstance", out var isFirst);
+        // An ARGUS_DATA copy gets its own lock, so it can run beside the real
+        // Argus instead of standing down (or making the real one close).
+        var lockName = "Local\\ArgusSingleInstance" + (ArgusSettings.Isolated
+            ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(
+                System.Text.Encoding.UTF8.GetBytes(ArgusSettings.Directory.ToLowerInvariant())))[..12]
+            : "");
+        _single = new Mutex(initiallyOwned: true, lockName, out var isFirst);
         if (!isFirst)
         {
             Log.Info("another Argus is already running; this one is standing down");

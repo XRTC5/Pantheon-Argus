@@ -253,9 +253,19 @@ public sealed class ArgusSettings
 
     // ------------------------------------------------------------ storage
 
+    /// <summary>
+    /// %APPDATA%\Argus, or ARGUS_DATA when set: a copy pointed at its own
+    /// settings (a test or profiling run) runs beside the real Argus with its
+    /// own single-instance lock and never touches the logon task. Setting
+    /// APPDATA does not redirect this; GetFolderPath asks the shell.
+    /// </summary>
     [JsonIgnore]
     public static string Directory =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Argus");
+        Isolated ? Environment.GetEnvironmentVariable("ARGUS_DATA")!
+                 : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Argus");
+
+    [JsonIgnore]
+    public static bool Isolated => Environment.GetEnvironmentVariable("ARGUS_DATA") is { Length: > 0 };
 
     [JsonIgnore]
     public static string FilePath => Path.Combine(Directory, "settings.json");
