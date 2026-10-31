@@ -8,7 +8,6 @@ that changes approximately never.
 Run:  py -3.12 tools/make_icon.py
 """
 
-import math
 import struct
 import zlib
 from pathlib import Path
