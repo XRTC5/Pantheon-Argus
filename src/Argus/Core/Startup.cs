@@ -13,7 +13,7 @@ namespace Argus.Core;
 /// logon-triggered task running an interactive process is what flashes a
 /// console on this machine twice a day. That reasoning does not survive
 /// contact with the binary: Argus is a WinExe, so it has no console to
-/// allocate and no conhost to flash. The flashes come from the PTT tasks,
+/// allocate and no conhost to flash. The flashes come from other scheduled tasks,
 /// which run powershell.exe.
 ///
 /// What the Run key does cost is measurable. Explorer holds the Run key for

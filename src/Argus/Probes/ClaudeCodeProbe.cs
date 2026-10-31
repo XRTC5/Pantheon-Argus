@@ -161,7 +161,7 @@ public sealed class ClaudeCodeProbe : IPushProbe, IDisposable
         return results;
     }
 
-    /// <summary>Turns the on-disk slug "C--dev-claude-obsidian" back into "dev/claude-obsidian".</summary>
+    /// <summary>Turns the on-disk slug "C--dev-my-notes" back into "dev/my-notes".</summary>
     private static string Pretty(string slug)
     {
         var s = slug;

@@ -155,8 +155,8 @@ public static class Breakdown
     {
         // The transcript folder is the only name Claude Code exposes, and it
         // is a flattened path. Rather than trying to unflatten it - which is
-        // ambiguous, because a folder called claude-obsidian flattens exactly
-        // the way a folder called claude\obsidian would - each live process is
+        // ambiguous, because a folder called my-notes flattens exactly
+        // the way a folder called my\notes would - each live process is
         // flattened the same way and compared.
         var sessions = scanner.Snapshot().Values
             .Where(p => p.Name.Equals("claude.exe", StringComparison.OrdinalIgnoreCase))
