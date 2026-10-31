@@ -8,6 +8,23 @@ Named for the hundred-eyed giant who was set to watch and never slept.
 
 ---
 
+## Install
+
+1. Download one zip from the [latest release](https://github.com/XRTC5/argus/releases/latest):
+   - **`argus-1.0.0-win-x64-standalone.zip`** (52 MB): a single `Argus.exe` with
+     .NET inside. Nothing else to install.
+   - **`argus-1.0.0-win-x64.zip`** (0.3 MB): needs Microsoft's .NET 9 Desktop
+     Runtime, installed once with `winget install Microsoft.DotNet.DesktopRuntime.9`.
+     Choose this one if you also run [Clio](https://github.com/XRTC5/clio):
+     both apps then share one copy of .NET in memory, and runtime security fixes
+     arrive through Windows Update.
+2. Unzip it to a folder you will keep, for example `%LOCALAPPDATA%\Argus`.
+3. Run `Argus.exe`. It starts with Windows by default; you can turn that off in its
+   settings.
+
+Windows SmartScreen may warn on first run because the exe is not code-signed.
+Choose **More info**, then **Run anyway**.
+
 ## What it shows
 
 | Section | Answers |
