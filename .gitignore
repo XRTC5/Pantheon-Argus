@@ -10,3 +10,5 @@ release/
 # fix-console-flash.ps1 and footprint samples. Task XML carries the machine
 # name and username, so it has no business in a public repository.
 backup/
+
+__pycache__/
