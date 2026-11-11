@@ -295,6 +295,7 @@ public sealed class PanelViewModel : INotifyPropertyChanged
     // not something the user chose, so it scrolls rather than pushing the
     // rest of the panel down. The cap itself is in settings.json.
     public Section Services { get; } = new("SERVICES", SignalGroup.Service);
+    public Section Bots     { get; } = new("BOTS", SignalGroup.Bot);
     public Section Schedule { get; } = new("SCHEDULE", SignalGroup.Schedule);
     public Section Claude   { get; } = new("CLAUDE CODE", SignalGroup.Claude);
     public Section Ghosts   { get; } = new("CAUGHT CONSOLES", SignalGroup.Ghost);
@@ -324,6 +325,7 @@ public sealed class PanelViewModel : INotifyPropertyChanged
     public void Sync(IReadOnlyList<Signal> signals)
     {
         Services.Sync(signals);
+        Bots.Sync(signals);
         Schedule.Sync(signals);
         Claude.Sync(signals);
         Ghosts.Sync(signals);

@@ -82,6 +82,13 @@ public sealed class WatchTarget
     /// <summary>Working directory. Defaults to the folder StartCommand lives in.</summary>
     public string? WorkingDirectory { get; set; }
 
+    /// <summary>
+    /// Which section the row sits in. "bots" puts it under BOTS: always-on
+    /// chat bots with no port, kept apart from local web services so a glance
+    /// at either list answers one question. Anything else, or nothing, is SERVICES.
+    /// </summary>
+    public string? Category { get; set; }
+
     public bool Enabled { get; set; } = true;
 }
 

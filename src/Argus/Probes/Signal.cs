@@ -38,6 +38,13 @@ public enum SignalGroup
     Process,
 
     /// <summary>
+    /// Always-on bots (Discord and the like): targets with Category "bots".
+    /// Built by the service probe exactly like a service row, only filed
+    /// under their own heading.
+    /// </summary>
+    Bot,
+
+    /// <summary>
     /// Repairs, pinned to the bottom of the panel. Not a status section -
     /// nothing in it is running or failing. These are the buttons for when
     /// something in one of the sections above is.

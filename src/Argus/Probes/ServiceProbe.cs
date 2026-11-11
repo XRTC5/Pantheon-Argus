@@ -158,7 +158,9 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
                 ControlTarget = target.Name,
                 Explain = explain.ToString().TrimEnd(),
                 Id = "svc:" + target.Name,
-                Group = SignalGroup.Service,
+                Group = string.Equals(target.Category, "bots", StringComparison.OrdinalIgnoreCase)
+                    ? SignalGroup.Bot
+                    : SignalGroup.Service,
                 Title = target.Name,
                 Detail = detail,
                 Memory = proc is null ? "" : TreeMemory(proc.Pid),

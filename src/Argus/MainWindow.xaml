@@ -264,6 +264,7 @@
                                Foreground="{StaticResource TextFaint}"
                                Margin="12,8,12,0" />
                     <ContentPresenter Content="{Binding Services}"  ContentTemplate="{StaticResource SectionTemplate}" />
+                    <ContentPresenter Content="{Binding Bots}"      ContentTemplate="{StaticResource SectionTemplate}" />
                     <ContentPresenter Content="{Binding Schedule}"  ContentTemplate="{StaticResource SectionTemplate}" />
                     <ContentPresenter Content="{Binding Claude}"    ContentTemplate="{StaticResource SectionTemplate}" />
                     <ContentPresenter Content="{Binding Ghosts}"    ContentTemplate="{StaticResource SectionTemplate}" />

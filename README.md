@@ -87,6 +87,10 @@ never flashes the kind of console this tool exists to hunt. With no
 `StartCommand` but a `ScheduledTask`, Start runs the task instead. With neither,
 there is no button: Argus never guesses how to start something.
 
+A target with `"Category": "bots"` is listed under its own **BOTS** heading
+instead of SERVICES: always-on chat bots with no port, kept apart from local
+web servers. It behaves like any other row, with the same Start and Stop.
+
 **Stop kills whatever owns the port**, not whatever matched a name. That
 distinction was learned by getting it wrong. Launcher scripts commonly use
 `start` to detach the real server, so the server is not a child of the script -
