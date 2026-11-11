@@ -10,9 +10,11 @@ namespace Argus.Core;
 /// This is the one part of Argus that acts rather than observes, so it is
 /// deliberately narrow:
 ///
-///   - It only ever runs a command the user put in settings.json. Nothing is
-///     inferred, guessed, or discovered. A target with no StartCommand and no
-///     ScheduledTask simply has no Start button.
+///   - It only ever runs a command that is written in settings.json. Either
+///     the user wrote it, or Argus copied it from a server it found already
+///     running (see Adoption) - the exact program, arguments and folder, never
+///     a guess. A target with no StartCommand and no ScheduledTask simply has
+///     no Start button.
 ///   - It only ever stops the exact process Argus already matched and showed
 ///     on the panel, plus that process's children. It never searches for
 ///     something to kill.

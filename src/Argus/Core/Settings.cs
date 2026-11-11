@@ -234,6 +234,25 @@ public sealed class ArgusSettings
     public bool DiscoverLocalServices { get; set; } = true;
 
     /// <summary>
+    /// Remember what discovery finds: a found server is written into Targets
+    /// with the command it was running, so it stays on the panel after it
+    /// stops and can be started again. See <see cref="Adoption"/>. Turn this
+    /// off to go back to found rows that vanish with their port.
+    /// </summary>
+    public bool RememberDiscovered { get; set; } = true;
+
+    /// <summary>
+    /// Adds a target and saves. The list is replaced rather than appended to:
+    /// this is called from the probe thread while the panel may be reading
+    /// Targets, and a reader holding the old list must not see it change.
+    /// </summary>
+    public void Remember(WatchTarget target)
+    {
+        Targets = [.. Targets, target];
+        Save();
+    }
+
+    /// <summary>
     /// How tall the Services section may grow before it scrolls inside itself,
     /// in device-independent pixels. Roughly 60 to a row.
     ///
@@ -300,16 +319,24 @@ public sealed class ArgusSettings
         return fresh;
     }
 
+    private static readonly object SaveGate = new();
+
     public void Save()
     {
         try
         {
-            System.IO.Directory.CreateDirectory(Directory);
-            // Write-then-move, so a crash mid-write cannot leave a truncated
-            // settings file that loses the placement on next boot.
-            var tmp = FilePath + ".tmp";
-            File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOpts));
-            File.Move(tmp, FilePath, overwrite: true);
+            // One writer at a time. Saves used to come only from the UI
+            // thread; remembering a found service saves from the probe thread,
+            // and two writers would fight over the same temporary file.
+            lock (SaveGate)
+            {
+                System.IO.Directory.CreateDirectory(Directory);
+                // Write-then-move, so a crash mid-write cannot leave a truncated
+                // settings file that loses the placement on next boot.
+                var tmp = FilePath + ".tmp";
+                File.WriteAllText(tmp, JsonSerializer.Serialize(this, JsonOpts));
+                File.Move(tmp, FilePath, overwrite: true);
+            }
         }
         catch (Exception ex)
         {

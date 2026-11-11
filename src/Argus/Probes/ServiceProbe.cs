@@ -212,6 +212,11 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
             if (string.IsNullOrWhiteSpace(web.Title)) continue;
 
             var proc = web.Pid != 0 ? scanner.TryGet(web.Pid) : null;
+
+            // Written into settings now, so from the next poll this is an
+            // ordinary target: it stays listed when it stops and has buttons.
+            // This round it is still shown as found, which is what it is.
+            if (settings.RememberDiscovered && proc is not null) Remember(web, proc);
             var process = proc is not null ? Trim(proc.Name) : "unknown process";
 
             var explain = new System.Text.StringBuilder();
@@ -226,10 +231,13 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
                 ? $"Process {process}, pid {proc.Pid}"
                 : "Process owner could not be read");
             explain.AppendLine();
-            explain.AppendLine(
-                "No Start or Stop here: Argus does not guess how to run something it was "
-                + "not told about. Add it to Targets in settings.json to get the buttons, "
-                + "a note and a health path.");
+            explain.AppendLine(settings.RememberDiscovered
+                ? "Argus has just written this into settings.json with the command it is "
+                  + "running, so within a few seconds it becomes an ordinary row that stays "
+                  + "listed when it stops and can be started again."
+                : "No Start or Stop here: RememberDiscovered is off, so this row lasts only "
+                  + "as long as the port answers. Add it to Targets in settings.json to get "
+                  + "the buttons, a note and a health path.");
 
             results.Add(new Signal
             {
@@ -249,6 +257,39 @@ public sealed class ServiceProbe(ArgusSettings settings, ProcessScanner scanner)
             });
         }
     }
+
+    private void Remember(LocalWeb web, ProcInfo proc)
+    {
+        try
+        {
+            // Checked again here, not only in the scan's skip list: the scan
+            // answers from memory for up to 45 seconds, and a port remembered
+            // a moment ago would otherwise be remembered twice.
+            if (settings.Targets.Any(t => t.Port == web.Port)) return;
+
+            var parent = proc.ParentPid > 0 ? scanner.TryGet(proc.ParentPid) : null;
+            var target = Adoption.From(web, Describe(proc), parent is null ? null : Describe(parent),
+                                       settings.AllTargets.Select(t => t.Name));
+            if (target is null) return;
+
+            settings.Remember(target);
+            Log.Info($"remembered {target.Name} on port {web.Port}: "
+                   + (target.StartCommand is null
+                       ? "no start command could be read"
+                       : $"{target.StartCommand} {target.StartArgs} in {target.WorkingDirectory}"));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"could not remember the service on port {web.Port}: {ex.Message}");
+        }
+    }
+
+    private FoundProcess Describe(ProcInfo p) => new()
+    {
+        ImagePath = scanner.GetImagePath(p.Pid),
+        CommandLine = scanner.GetCommandLine(p.Pid),
+        WorkingDirectory = Native.CurrentDirectory(p.Pid),
+    };
 
     /// <summary>
     /// Which live process is this target, if any.
