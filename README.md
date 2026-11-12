@@ -10,12 +10,12 @@ Named for the hundred-eyed giant who was set to watch and never slept.
 
 ## Install
 
-1. Download one zip from the [latest release](https://github.com/XRTC5/argus/releases/latest):
+1. Download one zip from the [latest release](https://github.com/XRTC5/Pantheon-Argus/releases/latest):
    - **`argus-1.0.0-win-x64-standalone.zip`** (52 MB): a single `Argus.exe` with
      .NET inside. Nothing else to install.
    - **`argus-1.0.0-win-x64.zip`** (0.3 MB): needs Microsoft's .NET 9 Desktop
      Runtime, installed once with `winget install Microsoft.DotNet.DesktopRuntime.9`.
-     Choose this one if you also run [Clio](https://github.com/XRTC5/clio):
+     Choose this one if you also run [Clio](https://github.com/XRTC5/Pantheon-Clio):
      both apps then share one copy of .NET in memory, and runtime security fixes
      arrive through Windows Update.
 2. Unzip it to a folder you will keep, for example `%LOCALAPPDATA%\Argus`.
@@ -107,7 +107,7 @@ later.
 
 ### With Clio
 
-[Clio](https://github.com/XRTC5/clio) is a sticky-notes companion app and a
+[Clio](https://github.com/XRTC5/Pantheon-Clio) is a sticky-notes companion app and a
 separate download; each works without the other. When both are installed,
 Clio leaves its path in `%APPDATA%\Clio\app.json`, and Argus picks that up and
 shows a **Clio** row with Start and Stop. Its Stop is `Clio.exe --quit`, so
